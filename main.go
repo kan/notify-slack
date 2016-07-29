@@ -4,8 +4,8 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/nlopes/slack"
 	"github.com/alecthomas/kingpin"
+	"github.com/nlopes/slack"
 )
 
 var (
@@ -13,6 +13,7 @@ var (
 	channel = kingpin.Flag("channel", "channel for send").Default("#general").Short('c').String()
 	user    = kingpin.Flag("user", "user name").Short('u').String()
 	icon    = kingpin.Flag("icon", "icon emoji").Short('i').String()
+	file    = kingpin.Flag("file", "upload file name").Short('f').String()
 )
 
 func main() {
@@ -23,6 +24,23 @@ func main() {
 	body, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
 		panic(err)
+	}
+
+	if file != nil {
+		content, err := ioutil.ReadFile(*file)
+		if err != nil {
+			panic(err)
+		}
+		params := slack.FileUploadParameters{
+			File: *file, Filetype: "auto", Content: string(content),
+			Title: "file upload", InitialComment: string(body),
+			Channels: []string{*channel},
+		}
+		_, err = api.UploadFile(params)
+		if err != nil {
+			panic(err)
+		}
+		return
 	}
 
 	params := slack.NewPostMessageParameters()
