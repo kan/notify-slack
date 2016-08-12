@@ -26,7 +26,7 @@ func main() {
 		panic(err)
 	}
 
-	if file != nil {
+	if *file != "" {
 		content, err := ioutil.ReadFile(*file)
 		if err != nil {
 			panic(err)
@@ -44,10 +44,10 @@ func main() {
 	}
 
 	params := slack.NewPostMessageParameters()
-	if user != nil {
+	if *user != "" {
 		params.Username = *user
 	}
-	if icon != nil {
+	if *icon != "" {
 		params.IconEmoji = *icon
 	}
 
