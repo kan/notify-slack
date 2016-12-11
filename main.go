@@ -25,6 +25,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	if len(body) == 0 {
+		return
+	}
 
 	if *file != "" {
 		content, err := ioutil.ReadFile(*file)
