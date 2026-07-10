@@ -1,10 +1,87 @@
 package main
 
 import (
+	"errors"
+	"io/fs"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/slack-go/slack"
 )
+
+// errReader is an io.Reader that always fails, used to exercise the
+// "read stdin" error-wrapping path in run() without touching real stdin.
+type errReader struct{}
+
+func (errReader) Read(_ []byte) (int, error) {
+	return 0, errors.New("boom")
+}
+
+func TestRunStdinReadError(t *testing.T) {
+	saved := *token
+	defer func() { *token = saved }()
+
+	*token = "xoxb-dummy"
+	err := run(errReader{})
+	if err == nil {
+		t.Fatal("run() should return an error when stdin read fails")
+	}
+	if !strings.Contains(err.Error(), "read stdin") {
+		t.Errorf("error should mention read stdin, got %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "boom") {
+		t.Errorf("error should wrap the underlying read error, got %q", err.Error())
+	}
+}
+
+func TestRunFileReadError(t *testing.T) {
+	savedToken := *token
+	savedFile := *file
+	defer func() {
+		*token = savedToken
+		*file = savedFile
+	}()
+
+	*token = "xoxb-dummy"
+	*file = filepath.Join(t.TempDir(), "does-not-exist.csv")
+
+	err := run(strings.NewReader("hello"))
+	if err == nil {
+		t.Fatal("run() should return an error when the upload file cannot be read")
+	}
+	if !strings.Contains(err.Error(), "read file") {
+		t.Errorf("error should mention read file, got %q", err.Error())
+	}
+	var pathErr *fs.PathError
+	if !errors.As(err, &pathErr) {
+		t.Errorf("error should wrap a *fs.PathError, got %v (%T)", err, err)
+	}
+}
+
+func TestRunRequiresToken(t *testing.T) {
+	saved := *token
+	defer func() { *token = saved }()
+
+	*token = ""
+	err := run(strings.NewReader("hello"))
+	if err == nil {
+		t.Fatal("run() with empty token should return an error")
+	}
+	if !strings.Contains(err.Error(), "token") {
+		t.Errorf("error should mention token, got %q", err.Error())
+	}
+}
+
+func TestRunEmptyStdinIsNoop(t *testing.T) {
+	savedToken := *token
+	defer func() { *token = savedToken }()
+
+	*token = "xoxb-dummy"
+	if err := run(strings.NewReader("")); err != nil {
+		t.Errorf("run() with empty stdin should be a no-op, got %v", err)
+	}
+}
 
 func TestIsEmptyBody(t *testing.T) {
 	t.Parallel()

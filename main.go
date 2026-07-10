@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -46,30 +48,40 @@ func buildMsgOptions(body []byte, user, icon string) []slack.MsgOption {
 func main() {
 	kingpin.Parse()
 
-	api := slack.New(*token)
+	if err := run(os.Stdin); err != nil {
+		fmt.Fprintln(os.Stderr, "notify-slack:", err)
+		os.Exit(1)
+	}
+}
 
-	body, err := io.ReadAll(os.Stdin)
+func run(stdin io.Reader) error {
+	if *token == "" {
+		return errors.New("missing Slack API token (set --token or SLACK_API_TOKEN)")
+	}
+
+	body, err := io.ReadAll(stdin)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("read stdin: %w", err)
 	}
 	if isEmptyBody(body) {
-		return
+		return nil
 	}
+
+	api := slack.New(*token)
 
 	if *file != "" {
 		content, err := os.ReadFile(*file)
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("read file %q: %w", *file, err)
 		}
-		params := buildUploadParams(*file, content, body, *channel)
-		if _, err := api.UploadFile(params); err != nil {
-			panic(err)
+		if _, err := api.UploadFile(buildUploadParams(*file, content, body, *channel)); err != nil {
+			return fmt.Errorf("upload file to %q: %w", *channel, err)
 		}
-		return
+		return nil
 	}
 
-	opts := buildMsgOptions(body, *user, *icon)
-	if _, _, err := api.PostMessage(*channel, opts...); err != nil {
-		panic(err)
+	if _, _, err := api.PostMessage(*channel, buildMsgOptions(body, *user, *icon)...); err != nil {
+		return fmt.Errorf("post message to %q: %w", *channel, err)
 	}
+	return nil
 }
