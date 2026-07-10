@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/slack-go/slack"
 )
 
@@ -375,6 +376,88 @@ func withUnsetEnv(t *testing.T, key string) {
 		t.Cleanup(func() { _ = os.Unsetenv(key) })
 	}
 	_ = os.Unsetenv(key)
+}
+
+// parseFlagsForTest parses args through the real kingpin.CommandLine so that
+// the Envar() precedence between command-line flags and environment
+// variables is exercised exactly as it is in main(). It saves and restores
+// the token/channel/user/icon package-level flag values so the parse does
+// not leak into other tests.
+func parseFlagsForTest(t *testing.T, args []string) {
+	t.Helper()
+	savedToken, savedChannel, savedUser, savedIcon := *token, *channel, *user, *icon
+	t.Cleanup(func() {
+		*token, *channel, *user, *icon = savedToken, savedChannel, savedUser, savedIcon
+	})
+	if _, err := kingpin.CommandLine.Parse(args); err != nil {
+		t.Fatalf("kingpin.CommandLine.Parse(%v) returned error: %v", args, err)
+	}
+}
+
+// TestFlagsEnvarPrecedence verifies that --channel/--user/--icon can be
+// supplied via SLACK_CHANNEL/SLACK_USER/SLACK_ICON (like --token and
+// SLACK_API_TOKEN already could), and that an explicit command-line flag
+// still wins over the environment variable.
+func TestFlagsEnvarPrecedence(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		envs        map[string]string
+		wantChannel string
+		wantUser    string
+		wantIcon    string
+	}{
+		{
+			name:        "no envar and no flag falls back to channel default",
+			wantChannel: "#general",
+		},
+		{
+			name: "envar sets channel/user/icon",
+			envs: map[string]string{
+				"SLACK_CHANNEL": "#from-env",
+				"SLACK_USER":    "env-bot",
+				"SLACK_ICON":    ":robot_face:",
+			},
+			wantChannel: "#from-env",
+			wantUser:    "env-bot",
+			wantIcon:    ":robot_face:",
+		},
+		{
+			name: "command-line flags take precedence over envar",
+			args: []string{"--channel", "#from-cli", "--user", "cli-bot", "--icon", ":ghost:"},
+			envs: map[string]string{
+				"SLACK_CHANNEL": "#from-env",
+				"SLACK_USER":    "env-bot",
+				"SLACK_ICON":    ":robot_face:",
+			},
+			wantChannel: "#from-cli",
+			wantUser:    "cli-bot",
+			wantIcon:    ":ghost:",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, key := range []string{"SLACK_CHANNEL", "SLACK_USER", "SLACK_ICON"} {
+				withUnsetEnv(t, key)
+			}
+			for k, v := range tt.envs {
+				t.Setenv(k, v)
+			}
+
+			parseFlagsForTest(t, tt.args)
+
+			if got := *channel; got != tt.wantChannel {
+				t.Errorf("channel = %q, want %q", got, tt.wantChannel)
+			}
+			if got := *user; got != tt.wantUser {
+				t.Errorf("user = %q, want %q", got, tt.wantUser)
+			}
+			if got := *icon; got != tt.wantIcon {
+				t.Errorf("icon = %q, want %q", got, tt.wantIcon)
+			}
+		})
+	}
 }
 
 func TestEnvFilePathFromArgs(t *testing.T) {

@@ -77,19 +77,21 @@ echo "本日の集計結果です" | notify-slack -c '#report' -f report.csv
 
 ## オプション
 
-| フラグ | 短縮 | 説明 | デフォルト |
-|---|---|---|---|
-| `--token` | `-t` | Slack API トークン（環境変数 `SLACK_API_TOKEN` でも指定可） | （なし） |
-| `--channel` | `-c` | 投稿先チャンネル | `#general` |
-| `--user` | `-u` | 表示ユーザー名 | （なし） |
-| `--icon` | `-i` | アイコン絵文字（例 `:ghost:`） | （なし） |
-| `--file` | `-f` | 添付するファイル | （なし） |
-| `--env-file` | `-e` | 読み込む dotenv ファイル | 下記参照 |
+| フラグ | 短縮 | 環境変数 | 説明 | デフォルト |
+|---|---|---|---|---|
+| `--token` | `-t` | `SLACK_API_TOKEN` | Slack API トークン |  |
+| `--channel` | `-c` | `SLACK_CHANNEL` | 投稿先チャンネル | `#general` |
+| `--user` | `-u` | `SLACK_USER` | 表示ユーザー名 |  |
+| `--icon` | `-i` | `SLACK_ICON` | アイコン絵文字（例 `:ghost:`） |  |
+| `--file` | `-f` |  | 添付するファイル |  |
+| `--env-file` | `-e` |  | 読み込む dotenv ファイル | 下記参照 |
 
 ## 環境変数ファイル（dotenv）
 
 `SLACK_API_TOKEN` などを dotenv ファイルから読み込める。トークンを毎回渡さずに
-済む。
+済む。トークン以外に `SLACK_CHANNEL` / `SLACK_USER` / `SLACK_ICON` も同様に
+環境変数で指定できる。cron のように投稿先やユーザーが毎行同じになりやすい用途では、
+これらを環境変数（または dotenv）にまとめると crontab の各行を短くできる。
 
 - `-e <path>` を指定すると、そのファイルを読み込む（読めなければエラー）。
 - 未指定のときは、存在すれば `./.env` を、続いて `/etc/notify-slack.env` を
@@ -100,6 +102,9 @@ echo "本日の集計結果です" | notify-slack -c '#report' -f report.csv
 ```dotenv
 # .env
 SLACK_API_TOKEN=xoxb-xxxxxxxx
+SLACK_CHANNEL=#general
+SLACK_USER=notify-bot
+SLACK_ICON=:ghost:
 ```
 
 ## 開発

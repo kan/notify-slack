@@ -17,9 +17,9 @@ import (
 
 var (
 	token   = kingpin.Flag("token", "Slack API token").Envar("SLACK_API_TOKEN").Short('t').String()
-	channel = kingpin.Flag("channel", "channel for send").Default("#general").Short('c').String()
-	user    = kingpin.Flag("user", "user name").Short('u').String()
-	icon    = kingpin.Flag("icon", "icon emoji").Short('i').String()
+	channel = kingpin.Flag("channel", "channel for send").Envar("SLACK_CHANNEL").Default("#general").Short('c').String()
+	user    = kingpin.Flag("user", "user name").Envar("SLACK_USER").Short('u').String()
+	icon    = kingpin.Flag("icon", "icon emoji").Envar("SLACK_ICON").Short('i').String()
 	file    = kingpin.Flag("file", "upload file name").Short('f').String()
 	// env-file はフラグ解決より前（kingpin.Parse 前）に読み込む必要があるため
 	// 値は loadEnv 側で os.Args を直接見て取得する。ここでは --help 表示と
