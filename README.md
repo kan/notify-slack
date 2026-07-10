@@ -1,5 +1,10 @@
 # notify-slack
 
+[![CI](https://github.com/kan/notify-slack/actions/workflows/ci.yml/badge.svg)](https://github.com/kan/notify-slack/actions/workflows/ci.yml)
+[![Security Scan](https://github.com/kan/notify-slack/actions/workflows/security.yml/badge.svg)](https://github.com/kan/notify-slack/actions/workflows/security.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/kan/notify-slack)](go.mod)
+[![Release](https://img.shields.io/github/v/release/kan/notify-slack?sort=semver)](https://github.com/kan/notify-slack/releases)
+
 標準入力やコマンドの出力を Slack に投稿する小さな CLI ツール。
 
 `echo message | notify-slack -c '#alerts'` のようにパイプで使うほか、コマンドを
@@ -99,21 +104,14 @@ SLACK_API_TOKEN=xoxb-xxxxxxxx
 
 ## 開発
 
+開発者向けの詳細（アーキテクチャ、ビルドやテスト、lint、ツール管理、リリース手順）は
+[CLAUDE.md](CLAUDE.md) にまとめている。
+
 ```bash
-go test ./...            # テスト
+go test ./...                     # テスト
 go tool golangci-lint run ./...   # lint
 ```
 
-lint と test は GitHub Actions（`.github/workflows/ci.yml`）で push / PR ごとに
-実行する。golangci-lint と goreleaser は go.mod の tool ディレクティブで
-バージョン管理し、`go tool <name>` で実行する。
-
-### リリース
-
-`v` から始まるタグを push すると、GoReleaser（`.github/workflows/release.yml`）が
-各プラットフォーム向けバイナリをビルドして GitHub Releases に配布する。
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
+lint / test / 脆弱性チェックは GitHub Actions で push / PR ごとに実行する。`v` から
+始まるタグを push すると各プラットフォーム向けバイナリが GitHub Releases に配布される
+（手順は [CLAUDE.md](CLAUDE.md) を参照）。
