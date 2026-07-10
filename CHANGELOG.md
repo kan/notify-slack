@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-07-10
+
+### Added
+
+- 投稿先チャンネル / ユーザー名 / アイコンを環境変数からも指定できるように
+  した（`SLACK_CHANNEL` / `SLACK_USER` / `SLACK_ICON`）。トークンの
+  `SLACK_API_TOKEN` と同じく `-c` / `-u` / `-i` の代わりに使える。cron で
+  投稿先やユーザーが毎行同じになりやすい場合に、環境変数（または dotenv）へ
+  まとめて crontab の各行を短くできる。
+
 ## [1.0.0] - 2026-07-10
 
 初回のタグ付きリリース。長く運用してきたベースを整備し、1.0.0 として公開する。
@@ -38,5 +48,6 @@
   （golangci-lint / goreleaser / govulncheck）は go.mod の tool ディレクティブで
   管理する。
 
-[Unreleased]: https://github.com/kan/notify-slack/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/kan/notify-slack/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/kan/notify-slack/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/kan/notify-slack/releases/tag/v1.0.0
