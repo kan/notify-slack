@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -218,5 +219,245 @@ func TestBuildMsgOptions(t *testing.T) {
 				t.Errorf("icon_emoji = %q, want %q", got, tt.wantIcon)
 			}
 		})
+	}
+}
+
+// withUnsetEnv ensures key is unset for the duration of the test, restoring
+// its previous value (or leaving it unset) afterwards. Tests using it mutate
+// global process environment state, so they must not run in parallel.
+func withUnsetEnv(t *testing.T, key string) {
+	t.Helper()
+	if old, ok := os.LookupEnv(key); ok {
+		t.Cleanup(func() { _ = os.Setenv(key, old) })
+	} else {
+		t.Cleanup(func() { _ = os.Unsetenv(key) })
+	}
+	_ = os.Unsetenv(key)
+}
+
+func TestEnvFilePathFromArgs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "no args", args: nil, want: ""},
+		{name: "no env-file flag present", args: []string{"--token", "xoxb-x", "-c", "#general"}, want: ""},
+		{name: "-e with space-separated path", args: []string{"-e", "/path/to/.env"}, want: "/path/to/.env"},
+		{name: "-e attached path", args: []string{"-e/path/to/.env"}, want: "/path/to/.env"},
+		{name: "--env-file with space-separated path", args: []string{"--env-file", "/path/to/.env"}, want: "/path/to/.env"},
+		{name: "--env-file= attached path", args: []string{"--env-file=/path/to/.env"}, want: "/path/to/.env"},
+		{name: "-e alone with no following value", args: []string{"-e"}, want: ""},
+		{name: "--env-file alone with no following value", args: []string{"--env-file"}, want: ""},
+		{name: "-e mixed among other args", args: []string{"--token", "xoxb-x", "-e", "/tmp/x.env", "-c", "#general"}, want: "/tmp/x.env"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := envFilePathFromArgs(tt.args); got != tt.want {
+				t.Errorf("envFilePathFromArgs(%v) = %q, want %q", tt.args, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadEnvFileSetsUnsetVars(t *testing.T) {
+	const key = "NOTIFY_SLACK_TEST_LOADENVFILE_NEW"
+	withUnsetEnv(t, key)
+
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte(key+"=file-value\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	if err := loadEnvFile(path); err != nil {
+		t.Fatalf("loadEnvFile() returned error: %v", err)
+	}
+
+	if got, want := os.Getenv(key), "file-value"; got != want {
+		t.Errorf("%s = %q, want %q", key, got, want)
+	}
+}
+
+func TestLoadEnvFileDoesNotOverrideExistingVar(t *testing.T) {
+	const key = "NOTIFY_SLACK_TEST_LOADENVFILE_OVERRIDE"
+	t.Setenv(key, "existing-value")
+
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte(key+"=file-value\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	if err := loadEnvFile(path); err != nil {
+		t.Fatalf("loadEnvFile() returned error: %v", err)
+	}
+
+	if got, want := os.Getenv(key), "existing-value"; got != want {
+		t.Errorf("%s = %q, want %q (existing env var must not be overridden)", key, got, want)
+	}
+}
+
+func TestLoadEnvFileMissingPath(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "does-not-exist.env")
+
+	err := loadEnvFile(path)
+	if err == nil {
+		t.Fatal("loadEnvFile() should return an error for a missing file")
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("error should wrap fs.ErrNotExist, got %v", err)
+	}
+}
+
+func TestLoadEnvFileParseError(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte("NOEQUALSSIGN\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	if err := loadEnvFile(path); err == nil {
+		t.Fatal("loadEnvFile() should return an error for an invalid env file")
+	}
+}
+
+func TestLoadEnvDashESelectsExplicitFile(t *testing.T) {
+	const key = "NOTIFY_SLACK_TEST_LOADENV_EXPLICIT"
+	withUnsetEnv(t, key)
+
+	path := filepath.Join(t.TempDir(), "custom.env")
+	if err := os.WriteFile(path, []byte(key+"=explicit-value\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	if err := loadEnv([]string{"-e", path}, nil); err != nil {
+		t.Fatalf("loadEnv() returned error: %v", err)
+	}
+
+	if got, want := os.Getenv(key), "explicit-value"; got != want {
+		t.Errorf("%s = %q, want %q", key, got, want)
+	}
+}
+
+func TestLoadEnvDashEMissingFileReturnsError(t *testing.T) {
+	t.Parallel()
+
+	missing := filepath.Join(t.TempDir(), "missing.env")
+
+	err := loadEnv([]string{"-e", missing}, nil)
+	if err == nil {
+		t.Fatal("loadEnv() with -e pointing to a missing file should return an error")
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("error should wrap fs.ErrNotExist, got %v", err)
+	}
+}
+
+func TestLoadEnvDashETakesPrecedenceOverDefaults(t *testing.T) {
+	const key = "NOTIFY_SLACK_TEST_LOADENV_PRECEDENCE"
+	withUnsetEnv(t, key)
+
+	dir := t.TempDir()
+	explicitPath := filepath.Join(dir, "explicit.env")
+	defaultPath := filepath.Join(dir, "default.env")
+
+	if err := os.WriteFile(explicitPath, []byte(key+"=explicit-value\n"), 0o600); err != nil {
+		t.Fatalf("write explicit env file: %v", err)
+	}
+	if err := os.WriteFile(defaultPath, []byte(key+"=default-value\n"), 0o600); err != nil {
+		t.Fatalf("write default env file: %v", err)
+	}
+
+	if err := loadEnv([]string{"--env-file=" + explicitPath}, []string{defaultPath}); err != nil {
+		t.Fatalf("loadEnv() returned error: %v", err)
+	}
+
+	if got, want := os.Getenv(key), "explicit-value"; got != want {
+		t.Errorf("%s = %q, want %q (-e should take precedence over defaults)", key, got, want)
+	}
+}
+
+func TestLoadEnvDefaultsPriorityAndMissingIgnored(t *testing.T) {
+	const key = "NOTIFY_SLACK_TEST_LOADENV_DEFAULTS_PRIORITY"
+	withUnsetEnv(t, key)
+
+	dir := t.TempDir()
+	localPath := filepath.Join(dir, "local.env")
+	systemPath := filepath.Join(dir, "system.env")
+	missingPath := filepath.Join(dir, "does-not-exist.env")
+
+	if err := os.WriteFile(localPath, []byte(key+"=local-value\n"), 0o600); err != nil {
+		t.Fatalf("write local env file: %v", err)
+	}
+	if err := os.WriteFile(systemPath, []byte(key+"=system-value\n"), 0o600); err != nil {
+		t.Fatalf("write system env file: %v", err)
+	}
+
+	if err := loadEnv(nil, []string{localPath, systemPath, missingPath}); err != nil {
+		t.Fatalf("loadEnv() returned error: %v", err)
+	}
+
+	if got, want := os.Getenv(key), "local-value"; got != want {
+		t.Errorf("%s = %q, want %q (local default should win over system default)", key, got, want)
+	}
+}
+
+func TestLoadEnvDoesNotOverrideExistingVar(t *testing.T) {
+	const key = "NOTIFY_SLACK_TEST_LOADENV_OVERRIDE"
+	t.Setenv(key, "existing-value")
+
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte(key+"=dotenv-value\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	if err := loadEnv([]string{"-e", path}, nil); err != nil {
+		t.Fatalf("loadEnv() returned error: %v", err)
+	}
+
+	if got, want := os.Getenv(key), "existing-value"; got != want {
+		t.Errorf("%s = %q, want %q (existing env var must not be overridden)", key, got, want)
+	}
+}
+
+func TestLoadEnvDefaultsParseErrorPropagates(t *testing.T) {
+	const key = "NOTIFY_SLACK_TEST_LOADENV_DEFAULTS_PARSE_ERROR"
+	withUnsetEnv(t, key)
+
+	dir := t.TempDir()
+	badPath := filepath.Join(dir, "bad.env")
+	laterPath := filepath.Join(dir, "later.env")
+
+	if err := os.WriteFile(badPath, []byte("NOEQUALSSIGN\n"), 0o600); err != nil {
+		t.Fatalf("write bad env file: %v", err)
+	}
+	if err := os.WriteFile(laterPath, []byte(key+"=later-value\n"), 0o600); err != nil {
+		t.Fatalf("write later env file: %v", err)
+	}
+
+	err := loadEnv(nil, []string{badPath, laterPath})
+	if err == nil {
+		t.Fatal("loadEnv() should return an error when a default file (other than the missing one) fails to parse")
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("error should not be fs.ErrNotExist, got %v", err)
+	}
+
+	if got, want := os.Getenv(key), ""; got != want {
+		t.Errorf("%s = %q, want %q (loadEnv should stop at the first non-missing error and not read later defaults)", key, got, want)
+	}
+}
+
+func TestLoadEnvNoArgsNoDefaultsIsNoop(t *testing.T) {
+	t.Parallel()
+
+	if err := loadEnv(nil, nil); err != nil {
+		t.Errorf("loadEnv() with no args and no defaults should be a no-op, got %v", err)
 	}
 }

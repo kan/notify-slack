@@ -4,6 +4,7 @@ go 1.26.5
 
 require (
 	github.com/alecthomas/kingpin/v2 v2.4.0
+	github.com/joho/godotenv v1.5.1
 	github.com/slack-go/slack v0.27.0
 )
 
