@@ -24,7 +24,7 @@ func TestRunStdinReadError(t *testing.T) {
 	defer func() { *token = saved }()
 
 	*token = "xoxb-dummy"
-	err := run(errReader{})
+	_, err := run(errReader{})
 	if err == nil {
 		t.Fatal("run() should return an error when stdin read fails")
 	}
@@ -47,7 +47,7 @@ func TestRunFileReadError(t *testing.T) {
 	*token = "xoxb-dummy"
 	*file = filepath.Join(t.TempDir(), "does-not-exist.csv")
 
-	err := run(strings.NewReader("hello"))
+	_, err := run(strings.NewReader("hello"))
 	if err == nil {
 		t.Fatal("run() should return an error when the upload file cannot be read")
 	}
@@ -65,7 +65,7 @@ func TestRunRequiresToken(t *testing.T) {
 	defer func() { *token = saved }()
 
 	*token = ""
-	err := run(strings.NewReader("hello"))
+	_, err := run(strings.NewReader("hello"))
 	if err == nil {
 		t.Fatal("run() with empty token should return an error")
 	}
@@ -79,7 +79,7 @@ func TestRunEmptyStdinIsNoop(t *testing.T) {
 	defer func() { *token = savedToken }()
 
 	*token = "xoxb-dummy"
-	if err := run(strings.NewReader("")); err != nil {
+	if _, err := run(strings.NewReader("")); err != nil {
 		t.Errorf("run() with empty stdin should be a no-op, got %v", err)
 	}
 }
@@ -222,6 +222,148 @@ func TestBuildMsgOptions(t *testing.T) {
 	}
 }
 
+func TestRunCommand(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		cmdName       string
+		args          []string
+		wantExitCode  int
+		wantOutput    string
+		wantOutputEq  bool
+		wantOutputHas []string
+	}{
+		{
+			name:         "success with output",
+			cmdName:      "sh",
+			args:         []string{"-c", "printf out"},
+			wantExitCode: 0,
+			wantOutput:   "out",
+			wantOutputEq: true,
+		},
+		{
+			name:          "non-zero exit captures stderr",
+			cmdName:       "sh",
+			args:          []string{"-c", "echo e >&2; exit 3"},
+			wantExitCode:  3,
+			wantOutputHas: []string{"e"},
+		},
+		{
+			name:         "no output",
+			cmdName:      "sh",
+			args:         []string{"-c", "exit 5"},
+			wantExitCode: 5,
+			wantOutput:   "",
+			wantOutputEq: true,
+		},
+		{
+			name:          "stdout and stderr are combined",
+			cmdName:       "sh",
+			args:          []string{"-c", "printf out1; echo out2 >&2"},
+			wantExitCode:  0,
+			wantOutputHas: []string{"out1", "out2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			output, code := runCommand(tt.cmdName, tt.args)
+
+			if code != tt.wantExitCode {
+				t.Errorf("exit code = %d, want %d", code, tt.wantExitCode)
+			}
+			if tt.wantOutputEq {
+				if got := string(output); got != tt.wantOutput {
+					t.Errorf("output = %q, want %q", got, tt.wantOutput)
+				}
+			}
+			for _, want := range tt.wantOutputHas {
+				if !strings.Contains(string(output), want) {
+					t.Errorf("output = %q, want it to contain %q", output, want)
+				}
+			}
+		})
+	}
+}
+
+func TestRunCommandStartupFailure(t *testing.T) {
+	t.Parallel()
+
+	output, code := runCommand("notify-slack-definitely-not-a-real-command-xyz", nil)
+
+	if code != 127 {
+		t.Errorf("exit code = %d, want 127", code)
+	}
+	if len(output) == 0 {
+		t.Error("output should contain the launch error text, got empty output")
+	}
+}
+
+func TestBuildCommandMessage(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		cmdName  string
+		args     []string
+		output   []byte
+		exitCode int
+		want     string
+	}{
+		{
+			name:     "with args",
+			cmdName:  "sh",
+			args:     []string{"-c", "true"},
+			output:   []byte("output\n"),
+			exitCode: 0,
+			want:     "$ sh -c true (exit 0)\noutput\n",
+		},
+		{
+			name:     "without args",
+			cmdName:  "ls",
+			args:     nil,
+			output:   []byte(""),
+			exitCode: 2,
+			want:     "$ ls (exit 2)\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := buildCommandMessage(tt.cmdName, tt.args, tt.output, tt.exitCode); got != tt.want {
+				t.Errorf("buildCommandMessage() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRunCommandModeEmptyOutputDoesNotPost exercises run()'s command mode with
+// a command that produces no output. runCommandMode must skip the Slack post
+// (no network access) and simply propagate the command's exit code.
+func TestRunCommandModeEmptyOutputDoesNotPost(t *testing.T) {
+	savedToken := *token
+	savedCommand := *command
+	defer func() {
+		*token = savedToken
+		*command = savedCommand
+	}()
+
+	*token = "xoxb-dummy"
+	*command = []string{"sh", "-c", "exit 7"}
+
+	code, err := run(strings.NewReader(""))
+	if err != nil {
+		t.Fatalf("run() returned unexpected error: %v", err)
+	}
+	if code != 7 {
+		t.Errorf("run() code = %d, want 7", code)
+	}
+}
+
 // withUnsetEnv ensures key is unset for the duration of the test, restoring
 // its previous value (or leaving it unset) afterwards. Tests using it mutate
 // global process environment state, so they must not run in parallel.
@@ -252,6 +394,7 @@ func TestEnvFilePathFromArgs(t *testing.T) {
 		{name: "-e alone with no following value", args: []string{"-e"}, want: ""},
 		{name: "--env-file alone with no following value", args: []string{"--env-file"}, want: ""},
 		{name: "-e mixed among other args", args: []string{"--token", "xoxb-x", "-e", "/tmp/x.env", "-c", "#general"}, want: "/tmp/x.env"},
+		{name: "-e after -- is part of the command and must not be detected", args: []string{"--token", "xoxb-x", "--", "sh", "-c", "-e $HOME"}, want: ""},
 	}
 
 	for _, tt := range tests {
