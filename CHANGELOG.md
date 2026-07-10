@@ -6,7 +6,7 @@
 
 ## [Unreleased]
 
-## [1.0.1] - 2026-07-10
+## [1.1.0] - 2026-07-10
 
 ### Added
 
@@ -48,6 +48,6 @@
   （golangci-lint / goreleaser / govulncheck）は go.mod の tool ディレクティブで
   管理する。
 
-[Unreleased]: https://github.com/kan/notify-slack/compare/v1.0.1...HEAD
-[1.0.1]: https://github.com/kan/notify-slack/compare/v1.0.0...v1.0.1
+[Unreleased]: https://github.com/kan/notify-slack/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/kan/notify-slack/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kan/notify-slack/releases/tag/v1.0.0
