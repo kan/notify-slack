@@ -4,10 +4,10 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| latest release | :white_check_mark: |
-| older   | :x:                |
+| 1.0.x   | :white_check_mark: |
+| < 1.0   | :x:                |
 
-安定版（1.0）リリース前のため、サポート対象は常に最新リリースです。
+サポート対象は最新のマイナー系列（現在 1.0.x）です。
 
 ## Reporting a Vulnerability
 
