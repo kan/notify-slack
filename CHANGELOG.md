@@ -6,6 +6,19 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-08-17
+
+### Security
+
+- ビルドに使う Go を 1.26.6 に引き上げた。1.26.5 の標準ライブラリには
+  govulncheck が到達可能と判定する脆弱性が 4 件（GO-2026-6218 /
+  GO-2026-6090 / GO-2026-5972 / GO-2026-5026）あり、いずれも 1.26.6 で
+  修正されている。動作の変更はなく、配布バイナリの再ビルドが目的。
+
+### Infrastructure
+
+- GitHub Actions の setup-go を v7 に更新した。
+
 ## [1.1.0] - 2026-07-10
 
 ### Added
@@ -48,6 +61,7 @@
   （golangci-lint / goreleaser / govulncheck）は go.mod の tool ディレクティブで
   管理する。
 
-[Unreleased]: https://github.com/kan/notify-slack/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/kan/notify-slack/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/kan/notify-slack/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/kan/notify-slack/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kan/notify-slack/releases/tag/v1.0.0
