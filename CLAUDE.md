@@ -62,10 +62,19 @@ go tool govulncheck ./...         # 既知脆弱性チェック
 
 ## リリース手順
 
-1. main が最新かつ CI グリーンであることを確認する。
-2. バージョンタグを打つ: `git tag vX.Y.Z`
-3. タグを push する: `git push origin vX.Y.Z`
-4. release ワークフローが `go tool goreleaser release --clean` を実行し、各
+1. CHANGELOG.md の `## [Unreleased]` の下に `## [X.Y.Z] - <日付>` の節を
+   追加し、末尾の比較リンクも更新する。minor 以上のリリースでは
+   SECURITY.md のサポート対象（最新のマイナー系列）も合わせる。
+   「CHANGELOG に vX.Y.Z を追加」としてコミットし、push する。
+2. main が最新かつ CI グリーンであることを確認する。
+3. バージョンタグを打つ: `git tag vX.Y.Z`
+4. タグを push する: `git push origin vX.Y.Z`
+5. release ワークフローが `go tool goreleaser release --clean` を実行し、各
    プラットフォーム（linux / darwin / windows × amd64 / arm64）のバイナリと
    `checksums.txt` を GitHub Releases に配布する。
-5. [Releases](https://github.com/kan/notify-slack/releases) で成果物を確認する。
+6. [Releases](https://github.com/kan/notify-slack/releases) で成果物を確認する。
+7. リリースノートを CHANGELOG.md の `## [X.Y.Z]` 節の内容に置き換える。
+   GoReleaser が付けるノートはコミットの一覧なので、利用者向けの記述に
+   そろえる。節の見出し行は除き、箇条書きの折り返しは 1 行につなぐ
+   （GitHub のリリースノートは改行をそのまま表示するため）。整えた本文を
+   ファイルに書き出し、`gh release edit vX.Y.Z --notes-file <file>` で反映する。
