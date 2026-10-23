@@ -59,6 +59,15 @@ go tool govulncheck ./...         # 既知脆弱性チェック
 - `.github/workflows/ci.yml`: push(main) / PR で gofmt / vet / test / golangci-lint。
 - `.github/workflows/security.yml`: push / PR / 週次で govulncheck。
 - `.github/workflows/release.yml`: タグ `v*` の push で GoReleaser を実行。
+- `.github/workflows/toolchain.yml`: 週次で go.mod の go ディレクティブが最新の
+  安定版 Go かを確かめる（Dependabot は go ディレクティブを上げない）。
+- `.github/workflows/verify-lockfile.yml`: push(main) / PR で `actions.lock` が
+  ワークフローと一致しているかを `gh actions-lock --verify` で確かめる。
+- Actions は `.github/workflows/actions.lock`（workflow lockfile）でコミットを
+  固定する。`uses:` を足したり変えたりしたら `gh actions-lock` を再実行し、
+  lockfile も一緒にコミットする。lockfile は手で編集しない。拡張は
+  verify-lockfile.yml と同じ版を入れる
+  （`gh extension install github/gh-actions-lock --pin v0.3.0`）。
 
 ## リリース手順
 
