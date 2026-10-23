@@ -6,6 +6,21 @@
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-10-23
+
+### Security
+
+- ビルドに使う Go を 1.27.3 に引き上げた。1.27.3 は `crypto/x509` の
+  セキュリティ修正（CVE-2026-111943）を含む。運用に懸念のある一部の中間
+  CA 証明書を信頼しないようにする修正で、Slack との HTTPS 通信の証明書検証が
+  対象になる。動作の変更はなく、配布バイナリの再ビルドが目的。
+
+### Infrastructure
+
+- GitHub Actions の依存を workflow lockfile（`actions.lock`）で固定し、
+  lockfile のずれを検出するワークフローを追加した。
+- go.mod の Go が最新の安定版かを週次で確かめるワークフローを追加した。
+
 ## [1.1.2] - 2026-10-19
 
 ### Security
@@ -79,7 +94,8 @@
   （golangci-lint / goreleaser / govulncheck）は go.mod の tool ディレクティブで
   管理する。
 
-[Unreleased]: https://github.com/kan/notify-slack/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/kan/notify-slack/compare/v1.1.3...HEAD
+[1.1.3]: https://github.com/kan/notify-slack/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/kan/notify-slack/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/kan/notify-slack/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/kan/notify-slack/compare/v1.0.0...v1.1.0
