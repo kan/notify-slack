@@ -18,6 +18,7 @@ jobs:
   verify:
     name: Verify actions.lock
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -27,5 +28,5 @@ jobs:
       # 拡張は public preview（pre-1.0）なので、版を固定する。この版は
       # Dependabot も actions.lock も追わない。lockfile の形式が上がって
       # --verify が落ちたら、手元の gh actions-lock と同じ版にここを上げる。
-      - run: gh extension install github/gh-actions-lock --pin v0.3.0
+      - run: gh extension install github/gh-actions-lock --pin v0.4.1
       - run: gh actions-lock --verify

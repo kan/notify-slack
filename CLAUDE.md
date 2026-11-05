@@ -93,7 +93,7 @@ go tool govulncheck ./...         # 既知脆弱性チェック
   固定する。`uses:` を足したり変えたりしたら `gh actions-lock` を再実行し、
   lockfile も一緒にコミットする。lockfile は手で編集しない。拡張は
   verify-lockfile.yml と同じ版を入れる
-  （`gh extension install github/gh-actions-lock --pin v0.3.0`）。
+  （`gh extension install github/gh-actions-lock --pin v0.4.1`）。
 
 ## リリース手順
 
