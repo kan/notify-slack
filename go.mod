@@ -5,7 +5,7 @@ go 1.27.3
 require (
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/joho/godotenv v1.5.1
-	github.com/slack-go/slack v0.29.0
+	github.com/slack-go/slack v0.30.1
 )
 
 require (
