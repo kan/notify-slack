@@ -117,6 +117,7 @@ go test ./...                     # テスト
 go tool golangci-lint run ./...   # lint
 ```
 
-lint / test / 脆弱性チェックは GitHub Actions で push / PR ごとに実行する。`v` から
-始まるタグを push すると各プラットフォーム向けバイナリが GitHub Releases に配布される
-（手順は [CLAUDE.md](CLAUDE.md) を参照）。
+lint / test / 脆弱性チェックは GitHub Actions で push / PR ごとに実行する。リリースは
+[tagpr](https://github.com/Songmu/tagpr) で行い、リリース PR をマージすると各
+プラットフォーム向けバイナリが GitHub Releases に配布される（手順は
+[CLAUDE.md](CLAUDE.md) を参照）。

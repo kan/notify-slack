@@ -1,0 +1,68 @@
+name: tagpr
+
+# Keeps the release pull request up to date and starts the release once it is
+# merged. Settings are in .tagpr; the release steps are in CLAUDE.md.
+#
+# - Each push to main rebuilds the release PR (branch tagpr-from-v<previous>)
+#   on top of main. scripts/tagpr/release-prepare.mjs, run by the node on the
+#   runner, stamps the CHANGELOG section.
+# - When the release PR is merged, the next run tags the merge commit and the
+#   release job starts release.yml on that tag.
+# - workflow_dispatch rebuilds the release PR, e.g. after adding tagpr:minor.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tagpr:
+    name: Prepare the release pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Runs never overlap (they would rebuild the same branch over each other),
+    # and a running one is not cancelled (stopped right after tagging, it
+    # would leave a tag without a release). GitHub still keeps only the newest
+    # pending run of the group: if a push lands while the run for the release
+    # PR's merge is waiting, that run is cancelled and nothing is tagged.
+    # Rerun it then; it checks out the merge commit and tags it (CLAUDE.md).
+    concurrency:
+      group: tagpr
+      cancel-in-progress: false
+    permissions:
+      contents: write       # Push the release branch and the tag
+      pull-requests: write  # Open and update the release PR
+      issues: read          # Read labels
+    outputs:
+      tag: ${{ steps.tagpr.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run tagpr
+        id: tagpr
+        uses: Songmu/tagpr@v1.21.4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # A tag pushed with GITHUB_TOKEN starts no workflow, but workflow_dispatch is
+  # exempt from that rule. Dispatching on the tag keeps github.ref at
+  # refs/tags/vX.Y.Z, which GoReleaser and the release job read.
+  release:
+    name: Start the release
+    needs: tagpr
+    if: needs.tagpr.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write  # workflow_dispatch
+    steps:
+      - name: Dispatch release.yml on the tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.tagpr.outputs.tag }}
+        run: gh workflow run release.yml --ref "$TAG"

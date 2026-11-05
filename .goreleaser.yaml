@@ -30,10 +30,7 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# The release notes are the CHANGELOG.md section of the version, which
+# release.yml passes to gh release create.
 changelog:
-  sort: asc
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
-      - "^ci:"
+  disable: true
