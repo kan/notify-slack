@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-11-05
+
 ### Changed
 
 - slack-go/slack を 0.30.1 に更新した。0.30.1 は `GetFile` が Slack 以外の URL にもトークンを送っていた問題（[GHSA-3q3v-34v2-g88f](https://github.com/slack-go/slack/security/advisories/GHSA-3q3v-34v2-g88f)）の修正を含む。notify-slack は `GetFile` を使わないので、この問題の影響は受けない。
@@ -104,6 +106,7 @@
   （golangci-lint / goreleaser / govulncheck）は go.mod の tool ディレクティブで
   管理する。
 
+[1.1.4]: https://github.com/kan/notify-slack/releases/tag/v1.1.4
 [1.1.3]: https://github.com/kan/notify-slack/releases/tag/v1.1.3
 [1.1.2]: https://github.com/kan/notify-slack/releases/tag/v1.1.2
 [1.1.1]: https://github.com/kan/notify-slack/releases/tag/v1.1.1
