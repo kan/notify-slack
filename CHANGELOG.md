@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- slack-go/slack を 0.30.1 に更新した。0.30.1 は `GetFile` が Slack 以外の URL にもトークンを送っていた問題（[GHSA-3q3v-34v2-g88f](https://github.com/slack-go/slack/security/advisories/GHSA-3q3v-34v2-g88f)）の修正を含む。notify-slack は `GetFile` を使わないので、この問題の影響は受けない。
+
 ### Infrastructure
 
 - リリースを [tagpr](https://github.com/Songmu/tagpr) で行うようにした。リリース PR をマージするとタグが打たれ、バイナリが配布される。
