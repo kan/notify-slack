@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+### Infrastructure
+
+- リリースを [tagpr](https://github.com/Songmu/tagpr) で行うようにした。リリース PR をマージするとタグが打たれ、バイナリが配布される。
+- GitHub のリリースノートを、コミットの一覧から CHANGELOG.md のその版の節に変えた。
+- リリースのワークフローを、書き込み権限を持たないビルドのジョブと、Release を作るジョブに分けた。
+
 ## [1.1.3] - 2026-10-23
 
 ### Security
@@ -94,9 +100,8 @@
   （golangci-lint / goreleaser / govulncheck）は go.mod の tool ディレクティブで
   管理する。
 
-[Unreleased]: https://github.com/kan/notify-slack/compare/v1.1.3...HEAD
-[1.1.3]: https://github.com/kan/notify-slack/compare/v1.1.2...v1.1.3
-[1.1.2]: https://github.com/kan/notify-slack/compare/v1.1.1...v1.1.2
-[1.1.1]: https://github.com/kan/notify-slack/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/kan/notify-slack/compare/v1.0.0...v1.1.0
+[1.1.3]: https://github.com/kan/notify-slack/releases/tag/v1.1.3
+[1.1.2]: https://github.com/kan/notify-slack/releases/tag/v1.1.2
+[1.1.1]: https://github.com/kan/notify-slack/releases/tag/v1.1.1
+[1.1.0]: https://github.com/kan/notify-slack/releases/tag/v1.1.0
 [1.0.0]: https://github.com/kan/notify-slack/releases/tag/v1.0.0
