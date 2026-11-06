@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- slack-go/slack を 0.33.0 に更新した。
+
 ## [1.1.4] - 2026-11-05
 
 ### Changed
