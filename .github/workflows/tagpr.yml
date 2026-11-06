@@ -3,11 +3,17 @@ name: tagpr
 # Keeps the release pull request up to date and starts the release once it is
 # merged. Settings are in .tagpr; the release steps are in CLAUDE.md.
 #
+# The work is done by kan/tagpr-scripts' shared workflow (its copy is
+# scripts/tagpr/.github/workflows/tagpr.yml). What it does, its inputs and what
+# happens when a run fails are in the tagpr-scripts README, "The tagpr workflow".
+#
 # - Each push to main rebuilds the release PR (branch tagpr-from-v<previous>)
-#   on top of main. scripts/tagpr/release-prepare.mjs, run by the node on the
-#   runner, stamps the CHANGELOG section.
-# - When the release PR is merged, the next run tags the merge commit and the
-#   release job starts release.yml on that tag.
+#   on top of main. scripts/tagpr/release-prepare.mjs stamps the CHANGELOG
+#   section. A failed run turns the release PR into a draft; the next run that
+#   succeeds marks it ready again.
+# - When the release PR is merged, the next run tags the merge commit with an
+#   annotated tag and starts release.yml on it with workflow_dispatch (a tag
+#   pushed with GITHUB_TOKEN starts no workflow; workflow_dispatch is exempt).
 # - workflow_dispatch rebuilds the release PR, e.g. after adding tagpr:minor.
 on:
   push:
@@ -17,52 +23,20 @@ on:
 permissions:
   contents: read
 
+# No concurrency here. The shared workflow's tagpr job queues the runs one at a
+# time; the same group on the caller too would be stopped as a deadlock.
 jobs:
   tagpr:
-    name: Prepare the release pull request
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    # Runs never overlap (they would rebuild the same branch over each other),
-    # and a running one is not cancelled (stopped right after tagging, it
-    # would leave a tag without a release). GitHub still keeps only the newest
-    # pending run of the group: if a push lands while the run for the release
-    # PR's merge is waiting, that run is cancelled and nothing is tagged.
-    # Rerun it then; it checks out the merge commit and tags it (CLAUDE.md).
-    concurrency:
-      group: tagpr
-      cancel-in-progress: false
+    # The SHA is the tagpr-scripts commit pulled into scripts/tagpr/. Move it in
+    # the pull request that runs git subtree pull (CLAUDE.md, "scripts/tagpr").
+    # actions.lock does not pin a reusable workflow from another repository, and
+    # Dependabot is told to leave it alone (dependabot.yml).
+    uses: kan/tagpr-scripts/.github/workflows/tagpr.yml@7a096eace93feb091b2b0b54ce35595d94a529a1
+    # The most the shared workflow gets. List all four.
     permissions:
       contents: write       # Push the release branch and the tag
       pull-requests: write  # Open and update the release PR
       issues: read          # Read labels
-    outputs:
-      tag: ${{ steps.tagpr.outputs.tag }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Run tagpr
-        id: tagpr
-        uses: Songmu/tagpr@v1.21.4
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # A tag pushed with GITHUB_TOKEN starts no workflow, but workflow_dispatch is
-  # exempt from that rule. Dispatching on the tag keeps github.ref at
-  # refs/tags/vX.Y.Z, which GoReleaser and the release job read.
-  release:
-    name: Start the release
-    needs: tagpr
-    if: needs.tagpr.outputs.tag != ''
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write  # workflow_dispatch
-    steps:
-      - name: Dispatch release.yml on the tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          TAG: ${{ needs.tagpr.outputs.tag }}
-        run: gh workflow run release.yml --ref "$TAG"
+      actions: write        # Start release.yml with workflow_dispatch
+    with:
+      release-workflow: release.yml
