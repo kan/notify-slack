@@ -12,13 +12,10 @@
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability in notify-slack, please report it
-through GitHub's private vulnerability reporting feature:
+through GitHub's private vulnerability reporting:
+<https://github.com/kan/notify-slack/security/advisories/new>
 
-1. Go to the [Security tab](https://github.com/kan/notify-slack/security)
-2. Click "Report a vulnerability"
-3. Provide details about the vulnerability
-
-Alternatively, you can email the maintainer directly.
+Please do not report vulnerabilities through public issues.
 
 ### What to include
 
