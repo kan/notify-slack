@@ -31,7 +31,7 @@ jobs:
     # the pull request that runs git subtree pull (CLAUDE.md, "scripts/tagpr").
     # actions.lock does not pin a reusable workflow from another repository, and
     # Dependabot is told to leave it alone (dependabot.yml).
-    uses: kan/tagpr-scripts/.github/workflows/tagpr.yml@7a096eace93feb091b2b0b54ce35595d94a529a1
+    uses: kan/tagpr-scripts/.github/workflows/tagpr.yml@966347b01e86b2aea4d71da0604588b17642b880
     # The most the shared workflow gets. List all four.
     permissions:
       contents: write       # Push the release branch and the tag

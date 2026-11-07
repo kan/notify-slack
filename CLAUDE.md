@@ -74,13 +74,16 @@ go tool govulncheck ./...         # 既知脆弱性チェック
   tagpr-scripts の commit に上げる。** squash のコミットのメッセージにある
   `git-subtree-split` の SHA（notify-slack の squash やマージのコミットの SHA ではない）。
   揃えておけば、`scripts/tagpr/.github/workflows/tagpr.yml` の写しが動いているものと同じになる。
+  揃っているかは CI が `node scripts/tagpr/verify-subtree.mjs` で確かめる。コミットした後に
+  repo のルートで手でも走らせられる（`HEAD` を読むので、作業ツリーの変更は見ない）。
 - **取り込む PR はマージコミットでマージする。** squash すると subtree が前回の取り込みを
   見つけられず、次の `git subtree pull` が壊れる。
 - 取り込みは CHANGELOG に書かない（利用者に届く変更ではない）。
 
 ## CI / ワークフロー
 
-- `.github/workflows/ci.yml`: push(main) / PR で gofmt / vet / test / golangci-lint。
+- `.github/workflows/ci.yml`: push(main) / PR で gofmt / vet / test / golangci-lint と、
+  `scripts/tagpr/` と tagpr.yml の呼ぶ行の SHA の照合（`verify-subtree.mjs`）。
 - `.github/workflows/security.yml`: push / PR / 週次で govulncheck。
 - `.github/workflows/tagpr.yml`: push(main) でリリース PR を作り直す。リリース PR の
   マージでタグを打ち、`release.yml` をそのタグで `workflow_dispatch` で起動する
@@ -106,9 +109,8 @@ go tool govulncheck ./...         # 既知脆弱性チェック
   ワークフローと一致しているかを `gh actions-lock --verify` で確かめる。
 - Actions は `.github/workflows/actions.lock`（workflow lockfile）でコミットを
   固定する。`uses:` を足したり変えたりしたら `gh actions-lock` を再実行し、
-  lockfile も一緒にコミットする。lockfile は手で編集しない。拡張は
-  verify-lockfile.yml と同じ版を入れる
-  （`gh extension install github/gh-actions-lock --pin v0.4.1`）。
+  lockfile も一緒にコミットする。lockfile は手で編集しない。拡張は、verify-lockfile.yml の
+  `gh extension install github/gh-actions-lock --pin <版>` と同じ版を入れる（版は `--pin` を見る）。
 
 ## リリース手順
 
@@ -133,7 +135,8 @@ go tool govulncheck ./...         # 既知脆弱性チェック
    ```
 
    - **最新の tagpr の run が success であること。** 失敗した run はリリース PR を
-     draft にする（次に成功した run が ready に戻す）。失敗していたら
+     draft にする（成功した run がどれを ready に戻し、どれを閉じるかは、下の 3 の
+     「The tagpr workflow」）。失敗していたら
      `release-prepare.mjs` の出力を読む。多いのは `## [Unreleased]` が空のとき。
      CHANGELOG を書く PR を main にマージすると作り直される
    - **版（PR のタイトル）が正しいこと。** 既定は patch。前回のリリース以降に
@@ -175,21 +178,16 @@ go tool govulncheck ./...         # 既知脆弱性チェック
    run は新しい push の run に置き換えられる（cancelled になる）。置き換えられたら、
    マージコミットの run を `gh run rerun <run-id>` で再実行するとタグが打たれる。
    置き換えた側の run は「already has `## [X.Y.Z]`」で赤になり、版だけ上がったリリース PR が
-   draft で残ることがある。draft を手で外さず、マージもしない。タグを打つ run は ready に
-   戻さないので、その後に通った push の run が作り直して戻す。
-   タグは打たれたのに `release.yml` の起動（`Start the release` のジョブ）だけが落ちたときは、
-   tagpr の run を再実行しない（tagpr はタグを打ち直さず、起動のジョブも飛ばされる）。
-   `gh workflow run release.yml --ref vX.Y.Z` で手で起動する。
+   draft で残ることがある。draft を手で外さず、マージもしない。
 
-   共通の workflow がタグを annotated に打ち直すステップで落ちたときは、run を再実行しても
-   直らない（タグはもうあるので、tagpr は打ち直さない）。手で annotated に打ち直す。
-   手で push したタグでは `push: tags` で `release.yml` が起動するので、
-   `gh workflow run` は重ねない（同じタグで 2 回走る）。
+   **タグを打った後で run が落ちたとき（annotated への打ち直し、`release.yml` の起動）と、
+   残ったリリース PR の扱いは、[scripts/tagpr/README.md](scripts/tagpr/README.md) の
+   「The tagpr workflow」に従う。** 復旧の手順をここへ書き写さない（tagpr の版が変わるたびに
+   写しがずれるため）。README を読むときの notify-slack の事情は次の 2 つ。
 
-   ```bash
-   git fetch --tags
-   git tag -a -f -m "Release vX.Y.Z" vX.Y.Z 'vX.Y.Z^{commit}' && git push -f origin vX.Y.Z
-   ```
+   - README の `release-workflow` は `release.yml`
+   - `release.yml` は `push: tags` でも起動する。手でタグを push したときは
+     `gh workflow run` を重ねない（同じタグで 2 回走る）
 
    リリースの直後は `## [Unreleased]` が空なので、次に CHANGELOG を書くまで main への
    push ごとに tagpr の run が失敗する。これは想定どおりで、その間のリリース PR は
