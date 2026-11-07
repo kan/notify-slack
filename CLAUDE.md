@@ -70,8 +70,8 @@ go tool govulncheck ./...         # 既知脆弱性チェック
   git subtree pull -S --prefix=scripts/tagpr https://github.com/kan/tagpr-scripts.git main --squash
   ```
 
-- **同じ PR で、`tagpr.yml` の `uses: kan/tagpr-scripts/...@<SHA>` を取り込んだ
-  tagpr-scripts の commit に上げる。** squash のコミットのメッセージにある
+- **同じ PR で、`tagpr.yml` と `tagpr-label.yml` の `uses: kan/tagpr-scripts/...@<SHA>` を
+  取り込んだ tagpr-scripts の commit に上げる。** squash のコミットのメッセージにある
   `git-subtree-split` の SHA（notify-slack の squash やマージのコミットの SHA ではない）。
   揃えておけば、`scripts/tagpr/.github/workflows/tagpr.yml` の写しが動いているものと同じになる。
   揃っているかは CI が `node scripts/tagpr/verify-subtree.mjs` で確かめる。コミットした後に
@@ -99,6 +99,12 @@ go tool govulncheck ./...         # 既知脆弱性チェック
     上がると、subtree の写しと実際に動く workflow が食い違う。ignore を外さないこと
   - 呼ぶジョブには権限を 4 つとも書き、`concurrency` は付けない（run を並べるのは
     共通の workflow。呼ぶ側にも付けると deadlock として止まる）
+- `.github/workflows/tagpr-label.yml`: リリース PR のラベルを付け外ししたら
+  （`pull_request_target`）、リリース PR を draft にし、`tagpr.yml` を `workflow_dispatch` で
+  起動して作り直させる。これも kan/tagpr-scripts の共通の workflow を呼ぶだけ（kan/tagpr-scripts#3）。
+  - 呼ぶ行の SHA は `tagpr.yml` と同じにする（`verify-subtree.mjs` がこちらも照合する）
+  - 権限は `actions: write` と `pull-requests: write`。何も checkout しない
+  - `tagpr.yml` の名前と `workflow_dispatch:` を消さない（これが起動する）
 - `.github/workflows/release.yml`: タグで起動する。`build` ジョブ（`contents: read`）が
   CHANGELOG の節の有無を確かめてから、`goreleaser release --skip=publish` で
   アーカイブを作る。`publish` ジョブ（`contents: write`）は、CHANGELOG の節を本文に
@@ -137,15 +143,16 @@ go tool govulncheck ./...         # 既知脆弱性チェック
    - **最新の tagpr の run が success であること。** 失敗した run はリリース PR を
      draft にする（成功した run がどれを ready に戻し、どれを閉じるかは、下の 3 の
      「The tagpr workflow」）。失敗していたら
-     `release-prepare.mjs` の出力を読む。多いのは `## [Unreleased]` が空のとき。
-     CHANGELOG を書く PR を main にマージすると作り直される
+     `release-prepare.mjs` の出力を読む。CHANGELOG を直す PR を main にマージすると
+     作り直される
    - **版（PR のタイトル）が正しいこと。** 既定は patch。前回のリリース以降に
      マージした PR が `enhancement` ラベルを持っていれば minor になる
-     （`.tagpr` の `minorLabels`）。手で変えるときはリリース PR にラベルを付けて作り直す
+     （`.tagpr` の `minorLabels`）。手で変えるときはリリース PR にラベルを付ける。
+     `tagpr-label.yml` がリリース PR を draft にして作り直し、ready に戻す
+     （`gh workflow run` は要らない）。作り直しの run が success になるのを待ってからマージする
 
      ```bash
      gh pr edit <番号> --add-label tagpr:minor
-     gh workflow run tagpr.yml --ref main
      ```
 
    - **PR のタイトルの版と CHANGELOG の見出しの版が一致していること。** タグの版は
@@ -176,9 +183,11 @@ go tool govulncheck ./...         # 既知脆弱性チェック
    打ち直す）、同じ run が `release.yml` をそのタグで起動する。**タグが打たれるまで
    main へほかの PR をマージしない。** tagpr の run は前の run が終わるまで待ち、待っている
    run は新しい push の run に置き換えられる（cancelled になる）。置き換えられたら、
-   マージコミットの run を `gh run rerun <run-id>` で再実行するとタグが打たれる。
-   置き換えた側の run は「already has `## [X.Y.Z]`」で赤になり、版だけ上がったリリース PR が
-   draft で残ることがある。draft を手で外さず、マージもしない。
+   次の tagpr の run がマージコミットの run を再実行してタグを打たせる（手で再実行しなくてよい）。
+   **手で `gh run rerun <run-id>` するのは、次の run がそれをできなかったとき（警告を出して
+   「already has `## [X.Y.Z]`」で赤になったとき）だけ。** マージコミットの tagpr のジョブが
+   cancelled ではなく落ちていたら、原因を直してから手で再実行する。どの場合も、版だけ上がった
+   リリース PR が draft で残ることがある。draft を手で外さず、マージもしない。
 
    **タグを打った後で run が落ちたとき（annotated への打ち直し、`release.yml` の起動）と、
    残ったリリース PR の扱いは、[scripts/tagpr/README.md](scripts/tagpr/README.md) の
@@ -189,9 +198,10 @@ go tool govulncheck ./...         # 既知脆弱性チェック
    - `release.yml` は `push: tags` でも起動する。手でタグを push したときは
      `gh workflow run` を重ねない（同じタグで 2 回走る）
 
-   リリースの直後は `## [Unreleased]` が空なので、次に CHANGELOG を書くまで main への
-   push ごとに tagpr の run が失敗する。これは想定どおりで、その間のリリース PR は
-   マージしない。
+   リリースの直後は `## [Unreleased]` が空になる。次に CHANGELOG を書くまで、main への
+   push の tagpr の run は tagpr を走らせず、「tagpr is not run」の notice を出して success で
+   終わる（リリース PR は作られない）。`workflow_dispatch` の run は tagpr を走らせるので、
+   この間に `gh workflow run tagpr.yml` すると `## [Unreleased]` が空で失敗する。
 
 4. **Release の成果物と本文を確かめる**
 
