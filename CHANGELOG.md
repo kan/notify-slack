@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.1.5] - 2026-11-07
+
 ### Changed
 
 - slack-go/slack を 0.34.0 に更新した。
@@ -110,6 +112,7 @@
   （golangci-lint / goreleaser / govulncheck）は go.mod の tool ディレクティブで
   管理する。
 
+[1.1.5]: https://github.com/kan/notify-slack/releases/tag/v1.1.5
 [1.1.4]: https://github.com/kan/notify-slack/releases/tag/v1.1.4
 [1.1.3]: https://github.com/kan/notify-slack/releases/tag/v1.1.3
 [1.1.2]: https://github.com/kan/notify-slack/releases/tag/v1.1.2
