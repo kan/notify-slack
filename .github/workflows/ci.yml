@@ -29,6 +29,8 @@ jobs:
         run: go vet ./...
       - name: test
         run: go test -race ./...
+      - name: Check scripts/tagpr/ against the tagpr workflow pin
+        run: node scripts/tagpr/verify-subtree.mjs
 
   lint:
     runs-on: ubuntu-latest
