@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Security
+
+- ビルドに使う Go を 1.27.4 に引き上げた。1.27.4 は cgo、`go` コマンド、コンパイラ、リンカ、`net/http` パッケージのセキュリティ修正を含む。notify-slack は Slack との通信に `net/http` を使うので、配布バイナリを修正済みの Go で作り直す。
+
 ## [1.1.5] - 2026-11-07
 
 ### Changed
