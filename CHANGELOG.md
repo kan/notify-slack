@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- slack-go/slack を 0.35.0 に更新した。0.35.0 は `InteractionCallbackParse` が署名の対象外の URL クエリから payload を読んでいた問題（[GHSA-pj2x-fjjr-q84c](https://github.com/slack-go/slack/security/advisories/GHSA-pj2x-fjjr-q84c)）の修正を含む。notify-slack は `InteractionCallbackParse` を使わないので、この問題の影響は受けない。
+
 ### Security
 
 - ビルドに使う Go を 1.27.4 に引き上げた。1.27.4 は cgo、`go` コマンド、コンパイラ、リンカ、`net/http` パッケージのセキュリティ修正を含む。notify-slack は Slack との通信に `net/http` を使うので、配布バイナリを修正済みの Go で作り直す。
