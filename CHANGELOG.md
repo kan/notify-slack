@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-11-14
+
 ### Changed
 
 - slack-go/slack を 0.35.0 に更新した。0.35.0 は `InteractionCallbackParse` が署名の対象外の URL クエリから payload を読んでいた問題（[GHSA-pj2x-fjjr-q84c](https://github.com/slack-go/slack/security/advisories/GHSA-pj2x-fjjr-q84c)）の修正を含む。notify-slack は `InteractionCallbackParse` を使わないので、この問題の影響は受けない。
@@ -120,6 +122,7 @@
   （golangci-lint / goreleaser / govulncheck）は go.mod の tool ディレクティブで
   管理する。
 
+[1.1.6]: https://github.com/kan/notify-slack/releases/tag/v1.1.6
 [1.1.5]: https://github.com/kan/notify-slack/releases/tag/v1.1.5
 [1.1.4]: https://github.com/kan/notify-slack/releases/tag/v1.1.4
 [1.1.3]: https://github.com/kan/notify-slack/releases/tag/v1.1.3
