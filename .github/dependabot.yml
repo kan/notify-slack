@@ -12,6 +12,21 @@ updates:
           - minor
           - patch
 
+  # Development tools (tools/go.mod: golangci-lint, govulncheck), kept out of
+  # the root go.mod for the same reason as the release tools below. Every
+  # require there is `// indirect` too, so the tools are named with
+  # dependency-type all. No group: a golangci-lint update that fails lint
+  # should not hold back a govulncheck update.
+  - package-ecosystem: gomod
+    directory: "/tools"
+    schedule:
+      interval: weekly
+    allow:
+      - dependency-name: github.com/golangci/golangci-lint/v2
+        dependency-type: all
+      - dependency-name: golang.org/x/vuln
+        dependency-type: all
+
   # Release tools (tools/release/go.mod: goreleaser, gocredits). A module of
   # its own so that they do not share a build list with the binary. Every
   # require there is `// indirect`, and Dependabot updates only direct ones

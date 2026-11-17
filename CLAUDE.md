@@ -31,30 +31,30 @@ go build ./...                    # ビルド
 go test ./...                     # テスト
 go vet ./...                      # vet
 gofmt -l .                        # フォーマット確認（修正は gofmt -w .）
-go tool golangci-lint run ./...   # lint
-go tool govulncheck ./...         # 既知脆弱性チェック
+go tool -modfile=tools/go.mod golangci-lint run ./...   # lint
+go tool -modfile=tools/go.mod govulncheck ./...         # 既知脆弱性チェック
 ```
 
 ## ツール管理
 
-`golangci-lint` / `govulncheck` は go.mod の tool ディレクティブで
-管理する。`go tool <name>` で実行し、バージョンは go.mod に固定する（Dependabot が
-更新を追う）。個別に `go install` しない。
+**ツールは別 module に置き、ルートの go.mod へ戻さない。** ルートに置くと、MVS でツールの
+依存が配布するバイナリの依存の版を引き上げうる。repo のルートで `-modfile` を付けて呼ぶ
+（`-modfile` でも `./...` はルートの module を指す）。個別に `go install` しない。
 
-**リリースのツール（`goreleaser` / `gocredits`）は別 module の `tools/release/go.mod` に置く。
-ルートの go.mod へ戻さない。** ルートに置くと、MVS で goreleaser の依存が配布するバイナリの
-依存の版を引き上げうる。repo のルートで `-modfile` を付けて呼ぶ。
+- 開発ツール（`golangci-lint` / `govulncheck`）は `tools/go.mod`
+- リリースのツール（`goreleaser` / `gocredits`）は `tools/release/go.mod`
 
 ```bash
 go tool -modfile=tools/release/go.mod goreleaser check   # .goreleaser.yaml の検査
 go tool -modfile=tools/release/go.mod gocredits .        # CREDITS の中身を出す
 ```
 
-- Dependabot は `/tools/release` を別の項目で見る（`dependabot.yml`）
-- **`tools/release/go.mod` の go の行はルートと同じにする。** ルートの go を上げるときは
-  こちらも上げる（CI の `goreleaser-check` のジョブが食い違いを落とす）
-- tidy は module ごとに要る（`go mod tidy` と `go mod tidy -C tools/release`）。CI が
-  `-diff` で両方を確かめる
+- Dependabot は `/tools` と `/tools/release` を別の項目で見る（`dependabot.yml`）
+- **`tools/go.mod` と `tools/release/go.mod` の go の行（と toolchain の行）はルートと
+  同じにする。** ルートの go を上げるときはこちらも上げる（CI の `goreleaser-check` の
+  ジョブが食い違いを落とす）
+- tidy は module ごとに要る。`go mod tidy`、`go mod tidy -C tools`、
+  `go mod tidy -C tools/release` の 3 つで、CI が `-diff` で 3 つとも確かめる
 
 ## テスト規約
 
@@ -99,7 +99,7 @@ go tool -modfile=tools/release/go.mod gocredits .        # CREDITS の中身を�
 
 - `.github/workflows/ci.yml`: push(main) / PR で gofmt / `go mod tidy -diff` / vet / test /
   golangci-lint を回す。`scripts/tagpr/` と tagpr.yml の呼ぶ行の SHA の照合（`verify-subtree.mjs`）もする。
-  tidy はルートと `tools/release` の両方を見る。`goreleaser check` も回す（`.goreleaser.yaml` は
+  tidy はルート、`tools`、`tools/release` の 3 つを見る。`goreleaser check` も回す（`.goreleaser.yaml` は
   タグを出すときにしか読まれないため）。
 - `.github/workflows/security.yml`: push / PR / 週次で govulncheck。
 - `.github/workflows/tagpr.yml`: push(main) でリリース PR を作り直す。リリース PR の

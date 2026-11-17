@@ -6,6 +6,10 @@ name: Toolchain
 # 初めて落ちる。Dependabot も go ディレクティブを上げない。新しい Go が出た
 # のに上げていないことを検出する検査は、ここにしかない。
 #
+# 上げるときは tools/go.mod と tools/release/go.mod の go 行も揃える（ci.yml の
+# goreleaser-check が検査する）。Go の版はリリースのアーカイブのバイト列を変えうるので、
+# リリースとリリースの間に上げる。
+#
 # Go のリリースは変更と無関係に起きるので、push / PR では走らせない
 # （無関係な PR を赤くしない）。
 on:

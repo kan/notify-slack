@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Infrastructure
+
+- 開発ツール（golangci-lint、govulncheck）をルートの `go.mod` から別 module の `tools/go.mod` へ移した。配布するバイナリの依存の版は変わらない。
+
 ## [1.1.6] - 2026-11-17
 
 ### Added

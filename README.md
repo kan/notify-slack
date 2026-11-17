@@ -121,8 +121,8 @@ SLACK_ICON=:ghost:
 [CLAUDE.md](CLAUDE.md) にまとめている。
 
 ```bash
-go test ./...                     # テスト
-go tool golangci-lint run ./...   # lint
+go test ./...                                          # テスト
+go tool -modfile=tools/go.mod golangci-lint run ./...  # lint
 ```
 
 lint / test / 脆弱性チェックは GitHub Actions で push / PR ごとに実行する。リリースは
