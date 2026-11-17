@@ -43,8 +43,17 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+      # Here rather than in the test job: this job's cache is keyed on
+      # tools/go.sum too
+      - name: go mod tidy (tools)
+        run: go mod tidy -C tools -diff
+      # The version is pinned in tools/go.mod. -modfile keeps ./... on the
+      # root module.
       - name: golangci-lint
-        run: go tool golangci-lint run ./...
+        run: go tool -modfile=tools/go.mod golangci-lint run ./...
 
   # .goreleaser.yaml is read only when a tag is released; check it on every
   # change instead
@@ -58,17 +67,23 @@ jobs:
         with:
           go-version-file: go.mod
           cache-dependency-path: tools/release/go.sum
-      # tools/release/go.mod follows the root's go line. Nothing raises it on
-      # its own (toolchain.yml reads only the root), and a newer one would make
-      # the release fetch another toolchain than setup-go installed.
-      - name: go line of tools/release
+      # tools/go.mod and tools/release/go.mod follow the root's go and
+      # toolchain lines. Nothing raises them on their own (toolchain.yml reads
+      # only the root, and a Dependabot update can add a toolchain line), and a
+      # newer one would make the release or the tools fetch another toolchain
+      # than setup-go installed.
+      - name: go line of tools and tools/release
         run: |
-          root="$(sed -n 's/^go //p' go.mod)"
-          tools="$(sed -n 's/^go //p' tools/release/go.mod)"
-          if [ "$root" != "$tools" ]; then
-            echo "::error::tools/release/go.mod has go $tools; the root go.mod has go $root"
-            exit 1
-          fi
+          for mod in tools/go.mod tools/release/go.mod; do
+            for line in go toolchain; do
+              root="$(sed -n "s/^$line //p" go.mod)"
+              tools="$(sed -n "s/^$line //p" "$mod")"
+              if [ "$root" != "$tools" ]; then
+                echo "::error::$mod has $line '$tools'; the root go.mod has $line '$root'"
+                exit 1
+              fi
+            done
+          done
       # Here rather than in the test job: this job's cache is keyed on
       # tools/release/go.sum
       - name: go mod tidy (tools/release)

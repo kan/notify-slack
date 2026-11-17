@@ -21,5 +21,10 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+      # The version is pinned in tools/go.mod and checked against go.sum.
+      # -modfile keeps ./... on the root module.
       - name: govulncheck
-        run: go tool govulncheck ./...
+        run: go tool -modfile=tools/go.mod govulncheck ./...
