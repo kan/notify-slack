@@ -2,7 +2,8 @@ name: release
 
 # tagpr.yml starts this with workflow_dispatch on the tag it pushed (a tag
 # pushed with GITHUB_TOKEN does not trigger push). The push trigger is for a
-# tag pushed by hand. Either way github.ref is the tag.
+# tag pushed by hand. Either way github.ref is the tag, which the build
+# provenance records.
 on:
   push:
     tags:
@@ -20,17 +21,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Builds the archives without the permission to write to the repository.
-  build:
-    # workflow_dispatch can be started on a branch; release only tags. The
-    # publish job depends on this one, so this condition guards both.
+  # Checks the tag before anything is built. No permission beyond reading:
+  # gocredits (third-party code) runs here, not in the job that can sign
+  # attestations.
+  check:
+    # workflow_dispatch can be started on a branch; release only tags. Every
+    # other job depends on this one, so this condition guards them all.
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    outputs:
+      prerelease: ${{ steps.tag.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
-          fetch-depth: 0  # GoReleaser resolves the current and previous tags
+          fetch-depth: 0  # release-tag.mjs reads origin/main
           persist-credentials: false
+
+      # The tag has to be vX.Y.Z on a commit of the release branch (.tagpr).
+      # A tag pushed by hand on another branch stops here. prerelease= follows
+      # the rule release-notes.mjs uses to pick the section.
+      - name: Check the tag
+        id: tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: node scripts/tagpr/release-tag.mjs "$TAG" >> "$GITHUB_OUTPUT"
 
       # The publish job makes the release notes from this section. Stop here,
       # before building, if the tag has none.
@@ -39,20 +53,54 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: node scripts/tagpr/release-notes.mjs "$TAG" > /dev/null
 
-      # No cache: a cache written by another workflow must not reach the
-      # released binaries.
+      # No cache: a cache written by another workflow must not decide whether
+      # the release goes ahead.
       - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
           cache: false
 
-      # Publishing is left to the publish job. The release notes come from
-      # CHANGELOG.md there, not from GoReleaser.
-      - name: build
-        run: go tool goreleaser release --clean --skip=publish
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      # The release PR refreshes CREDITS (scripts/release-prepare.sh). Stop
+      # the release if the tag does not have the refreshed file.
+      - name: Check CREDITS is up to date
+        run: go tool -modfile=tools/release/go.mod gocredits . | diff - CREDITS
 
+  # Builds and attests the archives without the permission to write to the
+  # repository.
+  build:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write           # Sigstore signing certificate for attestations
+      attestations: write       # Store the build provenance attestation
+      artifact-metadata: write  # Storage record for the attested artifacts
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0  # GoReleaser resolves the current and previous tags
+          persist-credentials: false
+
+      # No cache: a cache written by another workflow must not reach the
+      # binaries that get attested.
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      # GoReleaser is pinned in tools/release/go.mod and checked against its
+      # go.sum, so a rerun for the tag builds with the same version. No token:
+      # nothing is published from here, and the release notes come from
+      # CHANGELOG.md in the publish job.
+      - name: build
+        run: go tool -modfile=tools/release/go.mod goreleaser release --clean --skip=publish
+
+      # checksums.txt lists every archive, so each one becomes a subject.
+      - uses: actions/attest@v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt
+
+      # Paths are kept relative to dist/
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: release-dist
@@ -66,13 +114,14 @@ jobs:
   # Creates the release from what the build job produced. Nothing is compiled
   # here.
   publish:
-    needs: build
+    needs: [check, build]
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Create the release
+      contents: write  # Create and publish the release
     env:
       TAG: ${{ github.ref_name }}
       GH_REPO: ${{ github.repository }}
+      PRERELEASE: ${{ needs.check.outputs.prerelease }}
     steps:
       # For scripts/tagpr/release-notes.mjs and CHANGELOG.md
       - uses: actions/checkout@v7.0.1
@@ -84,15 +133,46 @@ jobs:
           name: release-dist
           path: dist
 
-      # The CHANGELOG.md section of the version ("Unreleased" for a
-      # pre-release); the build job has already checked it.
-      - name: Create release
+      # release_state is what an earlier attempt of this job left behind:
+      #   none      - nothing
+      #   draft     - it failed before publishing; the draft is replaced
+      #   published - the release is done; nothing is left to do
+      - name: Look for an earlier release
+        id: meta
         env:
           GH_TOKEN: ${{ github.token }}
-          PRERELEASE: ${{ contains(github.ref_name, '-') }}
         run: |
+          state=none
+          if is_draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null); then
+            state=published
+            if [ "$is_draft" = "true" ]; then
+              state=draft
+            fi
+          fi
+          echo "release_state=${state}" >> "$GITHUB_OUTPUT"
+
+      # The assets go onto a draft. Immutable releases are enabled, so once
+      # the release is published its assets and tag cannot be changed.
+      # The notes are the CHANGELOG.md section of the version ("Unreleased"
+      # for a pre-release); the check job has already checked it.
+      - name: Create draft release
+        if: steps.meta.outputs.release_state != 'published'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_STATE: ${{ steps.meta.outputs.release_state }}
+        run: |
+          if [ "$RELEASE_STATE" = draft ]; then
+            gh release delete "$TAG" --yes
+          fi
+
           notes="$RUNNER_TEMP/release-notes.md"
           node scripts/tagpr/release-notes.mjs "$TAG" > "$notes"
-          gh release create "$TAG" --verify-tag --prerelease="$PRERELEASE" \
+          gh release create "$TAG" --draft --verify-tag --prerelease="$PRERELEASE" \
             --title "$TAG" --notes-file "$notes" \
             dist/*.tar.gz dist/*.zip dist/checksums.txt
+
+      - name: Publish release
+        if: steps.meta.outputs.release_state != 'published'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$TAG" --draft=false

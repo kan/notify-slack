@@ -17,6 +17,14 @@
 [Releases](https://github.com/kan/notify-slack/releases) から OS / アーキテクチャ
 に合ったアーカイブ（linux / macOS / Windows、amd64 / arm64）を取得する。
 
+アーカイブには、GitHub Actions でこのリポジトリからビルドされたことを示す
+build provenance の attestation が付いている（1.1.5 より後の版）。取得したアーカイブは
+次で確かめられる。
+
+```bash
+gh attestation verify notify-slack_<version>_linux_amd64.tar.gz --repo kan/notify-slack
+```
+
 ### go install
 
 ```bash
@@ -121,3 +129,8 @@ lint / test / 脆弱性チェックは GitHub Actions で push / PR ごとに実
 [tagpr](https://github.com/Songmu/tagpr) で行い、リリース PR をマージすると各
 プラットフォーム向けバイナリが GitHub Releases に配布される（手順は
 [CLAUDE.md](CLAUDE.md) を参照）。
+
+## ライセンス
+
+[ISC License](LICENSE)。配布するバイナリに含まれる依存のライセンスは
+[CREDITS](CREDITS) にある（アーカイブにも同梱する）。

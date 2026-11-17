@@ -25,6 +25,10 @@ jobs:
             echo "$unformatted"
             exit 1
           fi
+      # The release does not tidy (.goreleaser.yaml), so a forgotten tidy
+      # stops here instead of shipping
+      - name: go mod tidy
+        run: go mod tidy -diff
       - name: go vet
         run: go vet ./...
       - name: test
@@ -41,3 +45,33 @@ jobs:
           go-version-file: go.mod
       - name: golangci-lint
         run: go tool golangci-lint run ./...
+
+  # .goreleaser.yaml is read only when a tag is released; check it on every
+  # change instead
+  goreleaser-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: tools/release/go.sum
+      # tools/release/go.mod follows the root's go line. Nothing raises it on
+      # its own (toolchain.yml reads only the root), and a newer one would make
+      # the release fetch another toolchain than setup-go installed.
+      - name: go line of tools/release
+        run: |
+          root="$(sed -n 's/^go //p' go.mod)"
+          tools="$(sed -n 's/^go //p' tools/release/go.mod)"
+          if [ "$root" != "$tools" ]; then
+            echo "::error::tools/release/go.mod has go $tools; the root go.mod has go $root"
+            exit 1
+          fi
+      # Here rather than in the test job: this job's cache is keyed on
+      # tools/release/go.sum
+      - name: go mod tidy (tools/release)
+        run: go mod tidy -C tools/release -diff
+      - name: goreleaser check
+        run: go tool -modfile=tools/release/go.mod goreleaser check
