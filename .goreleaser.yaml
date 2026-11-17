@@ -1,7 +1,8 @@
 # GoReleaser configuration (https://goreleaser.com).
 #
-# GoReleaser only builds: release.yml runs it with --skip=publish and creates
-# the GitHub release from the files in dist/, so the build runs without the
+# GoReleaser only builds: kan/tagpr-scripts' build-go.yml (called from
+# release.yml) runs it with --skip=publish, and release-go.yml creates the
+# GitHub release from the files in dist/, so the build runs without the
 # permission to write to the repository. GoReleaser is pinned in
 # tools/release/go.mod; check this file with
 #   go tool -modfile=tools/release/go.mod goreleaser check
@@ -52,7 +53,7 @@ archives:
       mode: 0755
       mtime: "{{ .CommitDate }}"
     # CREDITS holds the licenses of the modules linked into the binary. The
-    # release PR refreshes it (scripts/release-prepare.sh) and release.yml
+    # release PR refreshes it (release-prepare.mjs --credits) and build-go.yml
     # checks it before building.
     files:
       - src: LICENSE
@@ -68,10 +69,12 @@ archives:
       - src: CHANGELOG.md
         info: *reproducible_info
 
+# Keep this name: build-go.yml attests the archives listed in
+# dist/checksums.txt, and release-go.yml uploads them.
 checksum:
   name_template: checksums.txt
 
 # The release notes are the CHANGELOG.md section of the version, which
-# release.yml passes to gh release create.
+# build-go.yml extracts and release-go.yml passes to gh release create.
 changelog:
   disable: true
