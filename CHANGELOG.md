@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-11-17
+
 ### Added
 
 - ライセンスを ISC License と定め、`LICENSE` を置いた。リリースのアーカイブには `LICENSE` と、バイナリに含まれる依存のライセンスをまとめた `CREDITS` を同梱する。
@@ -126,6 +128,7 @@
   （golangci-lint / goreleaser / govulncheck）は go.mod の tool ディレクティブで
   管理する。
 
+[1.1.6]: https://github.com/kan/notify-slack/releases/tag/v1.1.6
 [1.1.5]: https://github.com/kan/notify-slack/releases/tag/v1.1.5
 [1.1.4]: https://github.com/kan/notify-slack/releases/tag/v1.1.4
 [1.1.3]: https://github.com/kan/notify-slack/releases/tag/v1.1.3
