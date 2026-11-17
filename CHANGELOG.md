@@ -6,8 +6,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- ライセンスを ISC License と定め、`LICENSE` を置いた。リリースのアーカイブには `LICENSE` と、バイナリに含まれる依存のライセンスをまとめた `CREDITS` を同梱する。
+- リリースのアーカイブに build provenance の attestation を付けた。`gh attestation verify <アーカイブ> --repo kan/notify-slack` で、GitHub Actions でこのリポジトリのタグからビルドされたことを確かめられる。
+
 ### Changed
 
+- リリースのアーカイブを再現可能にした。同じタグからは同じアーカイブ（`checksums.txt` の値）ができる。バイナリはビルドしたマシンのパスを含まなくなり、アーカイブ内のファイルの時刻と所有者はコミットの時刻と root に固定される。
 - slack-go/slack を 0.35.0 に更新した。0.35.0 は `InteractionCallbackParse` が署名の対象外の URL クエリから payload を読んでいた問題（[GHSA-pj2x-fjjr-q84c](https://github.com/slack-go/slack/security/advisories/GHSA-pj2x-fjjr-q84c)）の修正を含む。notify-slack は `InteractionCallbackParse` を使わないので、この問題の影響は受けない。
 
 ### Security

@@ -37,9 +37,24 @@ go tool govulncheck ./...         # 既知脆弱性チェック
 
 ## ツール管理
 
-`golangci-lint` / `goreleaser` / `govulncheck` は go.mod の tool ディレクティブで
+`golangci-lint` / `govulncheck` は go.mod の tool ディレクティブで
 管理する。`go tool <name>` で実行し、バージョンは go.mod に固定する（Dependabot が
 更新を追う）。個別に `go install` しない。
+
+**リリースのツール（`goreleaser` / `gocredits`）は別 module の `tools/release/go.mod` に置く。
+ルートの go.mod へ戻さない。** ルートに置くと、MVS で goreleaser の依存が配布するバイナリの
+依存の版を引き上げうる。repo のルートで `-modfile` を付けて呼ぶ。
+
+```bash
+go tool -modfile=tools/release/go.mod goreleaser check   # .goreleaser.yaml の検査
+go tool -modfile=tools/release/go.mod gocredits .        # CREDITS の中身を出す
+```
+
+- Dependabot は `/tools/release` を別の項目で見る（`dependabot.yml`）
+- **`tools/release/go.mod` の go の行はルートと同じにする。** ルートの go を上げるときは
+  こちらも上げる（CI の `goreleaser-check` のジョブが食い違いを落とす）
+- tidy は module ごとに要る（`go mod tidy` と `go mod tidy -C tools/release`）。CI が
+  `-diff` で両方を確かめる
 
 ## テスト規約
 
@@ -82,16 +97,22 @@ go tool govulncheck ./...         # 既知脆弱性チェック
 
 ## CI / ワークフロー
 
-- `.github/workflows/ci.yml`: push(main) / PR で gofmt / vet / test / golangci-lint と、
-  `scripts/tagpr/` と tagpr.yml の呼ぶ行の SHA の照合（`verify-subtree.mjs`）。
+- `.github/workflows/ci.yml`: push(main) / PR で gofmt / `go mod tidy -diff` / vet / test /
+  golangci-lint を回す。`scripts/tagpr/` と tagpr.yml の呼ぶ行の SHA の照合（`verify-subtree.mjs`）もする。
+  tidy はルートと `tools/release` の両方を見る。`goreleaser check` も回す（`.goreleaser.yaml` は
+  タグを出すときにしか読まれないため）。
 - `.github/workflows/security.yml`: push / PR / 週次で govulncheck。
 - `.github/workflows/tagpr.yml`: push(main) でリリース PR を作り直す。リリース PR の
   マージでタグを打ち、`release.yml` をそのタグで `workflow_dispatch` で起動する
   （GITHUB_TOKEN で push したタグでは `push: tags` が起動しないため）。
-  **中身は kan/tagpr-scripts の共通の workflow を呼ぶだけ**（kan/tagpr-scripts#6）。
-  落ちた run ではリリース PR を draft にする。タグを打った run では、そのタグを annotated に
-  打ち直してから `release.yml` を起動する。動きと落ちたときの扱いは、tagpr-scripts の README の
-  「The tagpr workflow」。
+  **中身は `credits` のジョブと、kan/tagpr-scripts の共通の workflow を呼ぶジョブだけ**
+  （kan/tagpr-scripts#6）。`credits` は gocredits（依存のコード）を書き込み権限の無いジョブで
+  走らせ、`CREDITS` を artifact で渡す。リリース PR の中身は `scripts/release-prepare.sh`
+  （`.tagpr` の `postVersionCommand`）が作る。`TAGPR_ARTIFACT_DIR` の `CREDITS` を検査してから
+  `scripts/tagpr/release-prepare.mjs --changelog-only` を呼び、最後に `CREDITS` を差し替える
+  （落ちるときに何も書き換えないため）。落ちた run ではリリース PR を draft にする。
+  タグを打った run では、そのタグを annotated に打ち直してから `release.yml` を起動する。
+  動きと落ちたときの扱いは、tagpr-scripts の README の「The tagpr workflow」。
   - 呼ぶ行は commit の SHA で書き、subtree と揃える（上の「scripts/tagpr」）。
     `actions.lock` は別の repo の reusable workflow を固定しない。中の action（tagpr など）は
     tagpr-scripts の `actions.lock` が固定する
@@ -105,10 +126,22 @@ go tool govulncheck ./...         # 既知脆弱性チェック
   - 呼ぶ行の SHA は `tagpr.yml` と同じにする（`verify-subtree.mjs` がこちらも照合する）
   - 権限は `actions: write` と `pull-requests: write`。何も checkout しない
   - `tagpr.yml` の名前と `workflow_dispatch:` を消さない（これが起動する）
-- `.github/workflows/release.yml`: タグで起動する。`build` ジョブ（`contents: read`）が
-  CHANGELOG の節の有無を確かめてから、`goreleaser release --skip=publish` で
-  アーカイブを作る。`publish` ジョブ（`contents: write`）は、CHANGELOG の節を本文に
-  して Release を作る。書き込み権限を持つジョブではビルドしない。
+- `.github/workflows/release.yml`: タグで起動する。書き込み権限を持つジョブではビルドしない。
+  - `check` ジョブ（`contents: read` だけ）: タグが `vX.Y.Z` の形で main の上にあるか
+    （`release-tag.mjs`。プレリリースかもここで決める）、CHANGELOG の節があるか、`CREDITS` が
+    最新かを確かめる。gocredits（依存のコード）は attestation に署名できる `build` ではなくここで走らせる
+  - `build` ジョブ（`contents: read` と attestation の権限）: `goreleaser release --skip=publish` で
+    アーカイブを作り、build provenance の attestation を付ける。GoReleaser に token は渡さない
+  - `publish` ジョブ（`contents: write`）: CHANGELOG の節を本文にして Release を draft で作り、
+    アーカイブを載せてから公開する。前の試行が残した Release を見て、draft なら作り直し、
+    公開済みなら何もしない
+  - **immutable releases を有効にしてある。** 公開した Release のアセットとタグは変えられない
+    （Release の削除はできる）。アセットを載せるのは draft の間だけ
+  - **ビルドは再現可能にしてある**（`.goreleaser.yaml` の `-trimpath`、`mod_timestamp`、アーカイブ内の
+    時刻と所有者）。再実行で同じアーカイブができるので、attestation の付いたものと食い違わない。
+    GoReleaser の版を上げるとアーカイブのバイトが変わりうるので、上げるのはリリースの間にする
+  - `.goreleaser.yaml` の `before.hooks` で tree を書き換えない（`go mod tidy` を入れない）。
+    タグが持つものをそのままビルドする。tidy のし忘れは CI が拾う
 - `.github/workflows/toolchain.yml`: 週次で go.mod の go ディレクティブが最新の
   安定版 Go かを確かめる（Dependabot は go ディレクティブを上げない）。
 - `.github/workflows/verify-lockfile.yml`: push(main) / PR で `actions.lock` が
@@ -143,8 +176,11 @@ go tool govulncheck ./...         # 既知脆弱性チェック
    - **最新の tagpr の run が success であること。** 失敗した run はリリース PR を
      draft にする（成功した run がどれを ready に戻し、どれを閉じるかは、下の 3 の
      「The tagpr workflow」）。失敗していたら
-     `release-prepare.mjs` の出力を読む。CHANGELOG を直す PR を main にマージすると
-     作り直される
+     `scripts/release-prepare.sh` の出力を読む
+     - `TAGPR_ARTIFACT_DIR must hold the generated CREDITS file` なら、`credits` のジョブが
+       落ちたか artifact を受け取れていない。`credits` のジョブを直すか、run を再実行する
+     - それ以外は `release-prepare.mjs` が CHANGELOG を拒んでいる。CHANGELOG を直す PR を
+       main にマージすると作り直される
    - **版（PR のタイトル）が正しいこと。** 既定は patch。前回のリリース以降に
      マージした PR が `enhancement` ラベルを持っていれば minor になる
      （`.tagpr` の `minorLabels`）。手で変えるときはリリース PR にラベルを付ける。
@@ -159,7 +195,8 @@ go tool govulncheck ./...         # 既知脆弱性チェック
      マージの時点のラベルで決まり、見出しは最後に作り直した時点の版のまま。
      食い違ったままマージすると、タグは打たれるが `release.yml` が節を見つけられずに
      止まる
-   - Files changed が `CHANGELOG.md`（見出しとリンク定義）だけであること
+   - Files changed が `CHANGELOG.md`（見出しとリンク定義）と `CREDITS` だけであること
+     （`CREDITS` は依存が変わっていなければ差分が無い）
    - 節を直すときは、リリース PR のブランチではなく **main の `## [Unreleased]` を
      直す**（ブランチは tagpr が作り直すたびに main から作られる）
    - 見出しの日付は、tagpr が最後にリリース PR を作り直した日（日本時間）。マージする
@@ -209,3 +246,13 @@ go tool govulncheck ./...         # 既知脆弱性チェック
    アーカイブと `checksums.txt` を Release に載せる。
    [Releases](https://github.com/kan/notify-slack/releases) で成果物と本文を確かめる。
    Release の本文は `node scripts/tagpr/release-notes.mjs vX.Y.Z` の出力と同じ。
+   attestation は次で確かめる。
+
+   ```bash
+   gh attestation verify notify-slack_X.Y.Z_linux_amd64.tar.gz --repo kan/notify-slack
+   ```
+
+   **`release.yml` の `publish` が落ちたら、run を再実行する**（`gh run rerun <run-id> --failed`）。
+   draft が残っていれば作り直し、公開済みなら何もしない。**`build` が渡すアーカイブの artifact は
+   1 日で消える。** 1 日を過ぎたら `--failed` を付けずに run の全体を再実行する。再現可能な
+   ビルドなので、同じアーカイブができる。

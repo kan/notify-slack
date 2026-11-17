@@ -1,8 +1,23 @@
+# GoReleaser configuration (https://goreleaser.com).
+#
+# GoReleaser only builds: release.yml runs it with --skip=publish and creates
+# the GitHub release from the files in dist/, so the build runs without the
+# permission to write to the repository. GoReleaser is pinned in
+# tools/release/go.mod; check this file with
+#   go tool -modfile=tools/release/go.mod goreleaser check
+#
+# The build is reproducible: the same tag gives the same archives. Timestamps
+# come from the commit, not from the clock.
 version: 2
 
+project_name: notify-slack
+
+# Nothing here changes the tree: a release builds what the tag holds. CI
+# checks that go.mod and go.sum are tidy (go mod tidy -diff).
 before:
   hooks:
-    - go mod tidy
+    - go mod download
+    - go mod verify
 
 builds:
   - env:
@@ -14,8 +29,11 @@ builds:
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
     ldflags:
       - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
   - formats:
@@ -26,6 +44,29 @@ archives:
       - goos: windows
         formats:
           - zip
+    # Files would otherwise carry the time of the checkout, and the user and
+    # umask of whoever ran the build
+    builds_info:
+      owner: root
+      group: root
+      mode: 0755
+      mtime: "{{ .CommitDate }}"
+    # CREDITS holds the licenses of the modules linked into the binary. The
+    # release PR refreshes it (scripts/release-prepare.sh) and release.yml
+    # checks it before building.
+    files:
+      - src: LICENSE
+        info: &reproducible_info
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
+      - src: CREDITS
+        info: *reproducible_info
+      - src: README.md
+        info: *reproducible_info
+      - src: CHANGELOG.md
+        info: *reproducible_info
 
 checksum:
   name_template: checksums.txt

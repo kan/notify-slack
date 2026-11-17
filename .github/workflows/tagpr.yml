@@ -8,10 +8,11 @@ name: tagpr
 # happens when a run fails are in the tagpr-scripts README, "The tagpr workflow".
 #
 # - Each push to main rebuilds the release PR (branch tagpr-from-v<previous>)
-#   on top of main. scripts/tagpr/release-prepare.mjs stamps the CHANGELOG
-#   section. A failed run turns the release PR into a draft; the next run that
-#   succeeds marks it ready again. With nothing to release (## [Unreleased] is
-#   empty), the run passes with a notice and does not run tagpr.
+#   on top of main. scripts/release-prepare.sh stamps the CHANGELOG section
+#   (with scripts/tagpr/release-prepare.mjs) and refreshes CREDITS. A failed
+#   run turns the release PR into a draft; the next run that succeeds marks it
+#   ready again. With nothing to release (## [Unreleased] is empty), the run
+#   passes with a notice and does not run tagpr.
 # - When the release PR is merged, the next run tags the merge commit with an
 #   annotated tag and starts release.yml on it with workflow_dispatch (a tag
 #   pushed with GITHUB_TOKEN starts no workflow; workflow_dispatch is exempt).
@@ -29,7 +30,42 @@ permissions:
 # No concurrency here. The shared workflow's tagpr job queues the runs one at a
 # time; the same group on the caller too would be stopped as a deadlock.
 jobs:
+  # gocredits is third-party code, so it runs here, with a read-only token,
+  # and hands its output to the tagpr job as an artifact. Nothing in the tagpr
+  # job, which can push to the repository, runs code from dependencies.
+  credits:
+    name: Generate CREDITS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # No cache: a cache written by another workflow must not reach what the
+      # tagpr job commits.
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Generate CREDITS
+        run: |
+          mkdir -p "$RUNNER_TEMP/credits"
+          go tool -modfile=tools/release/go.mod gocredits . > "$RUNNER_TEMP/credits/CREDITS"
+
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: credits
+          path: ${{ runner.temp }}/credits/CREDITS
+          retention-days: 1
+          if-no-files-found: error
+
   tagpr:
+    needs: credits
+    # The run that tags a merged release PR does not use CREDITS, so a failed
+    # credits job must not keep it from tagging. Without the artifact,
+    # scripts/release-prepare.sh fails before it writes anything.
+    if: ${{ !cancelled() }}
     # The SHA is the tagpr-scripts commit pulled into scripts/tagpr/. Move it in
     # the pull request that runs git subtree pull (CLAUDE.md, "scripts/tagpr").
     # actions.lock does not pin a reusable workflow from another repository, and
@@ -43,3 +79,5 @@ jobs:
       actions: write        # Start release.yml with workflow_dispatch
     with:
       release-workflow: release.yml
+      # Read by scripts/release-prepare.sh as TAGPR_ARTIFACT_DIR/CREDITS
+      artifact: credits

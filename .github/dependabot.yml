@@ -12,6 +12,24 @@ updates:
           - minor
           - patch
 
+  # Release tools (tools/release/go.mod: goreleaser, gocredits). A module of
+  # its own so that they do not share a build list with the binary. Every
+  # require there is `// indirect`, and Dependabot updates only direct ones
+  # unless told, so name the tools.
+  - package-ecosystem: gomod
+    directory: "/tools/release"
+    schedule:
+      interval: weekly
+    allow:
+      - dependency-name: github.com/goreleaser/goreleaser/v2
+        dependency-type: all
+      - dependency-name: github.com/Songmu/gocredits
+        dependency-type: all
+    groups:
+      release-tools:
+        patterns:
+          - "*"
+
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
