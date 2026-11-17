@@ -85,8 +85,8 @@ go tool -modfile=tools/release/go.mod gocredits .        # CREDITS の中身を�
   git subtree pull -S --prefix=scripts/tagpr https://github.com/kan/tagpr-scripts.git main --squash
   ```
 
-- **同じ PR で、`tagpr.yml` と `tagpr-label.yml` の `uses: kan/tagpr-scripts/...@<SHA>` を
-  取り込んだ tagpr-scripts の commit に上げる。** squash のコミットのメッセージにある
+- **同じ PR で、`tagpr.yml`、`tagpr-label.yml`、`release.yml`（2 行）の
+  `uses: kan/tagpr-scripts/...@<SHA>` をすべて、取り込んだ tagpr-scripts の commit に上げる。** squash のコミットのメッセージにある
   `git-subtree-split` の SHA（notify-slack の squash やマージのコミットの SHA ではない）。
   揃えておけば、`scripts/tagpr/.github/workflows/tagpr.yml` の写しが動いているものと同じになる。
   揃っているかは CI が `node scripts/tagpr/verify-subtree.mjs` で確かめる。コミットした後に
@@ -105,12 +105,12 @@ go tool -modfile=tools/release/go.mod gocredits .        # CREDITS の中身を�
 - `.github/workflows/tagpr.yml`: push(main) でリリース PR を作り直す。リリース PR の
   マージでタグを打ち、`release.yml` をそのタグで `workflow_dispatch` で起動する
   （GITHUB_TOKEN で push したタグでは `push: tags` が起動しないため）。
-  **中身は `credits` のジョブと、kan/tagpr-scripts の共通の workflow を呼ぶジョブだけ**
-  （kan/tagpr-scripts#6）。`credits` は gocredits（依存のコード）を書き込み権限の無いジョブで
-  走らせ、`CREDITS` を artifact で渡す。リリース PR の中身は `scripts/release-prepare.sh`
-  （`.tagpr` の `postVersionCommand`）が作る。`TAGPR_ARTIFACT_DIR` の `CREDITS` を検査してから
-  `scripts/tagpr/release-prepare.mjs --changelog-only` を呼び、最後に `CREDITS` を差し替える
-  （落ちるときに何も書き換えないため）。落ちた run ではリリース PR を draft にする。
+  **中身は kan/tagpr-scripts の共通の workflow を呼ぶジョブだけ**（kan/tagpr-scripts#6）。
+  `go-credits: true` で、共通の workflow が gocredits（依存のコード）を書き込み権限の無いジョブで
+  走らせ、`CREDITS` を渡す（kan/tagpr-scripts#17）。リリース PR の中身は
+  `scripts/tagpr/release-prepare.mjs --changelog-only --credits`（`.tagpr` の `postVersionCommand`）が
+  作る。CHANGELOG の節を書き換え、`CREDITS` を差し替える。検査を済ませてから書くので、
+  落ちるときは何も書き換えない。落ちた run ではリリース PR を draft にする。
   タグを打った run では、そのタグを annotated に打ち直してから `release.yml` を起動する。
   動きと落ちたときの扱いは、tagpr-scripts の README の「The tagpr workflow」。
   - 呼ぶ行は commit の SHA で書き、subtree と揃える（上の「scripts/tagpr」）。
@@ -126,15 +126,22 @@ go tool -modfile=tools/release/go.mod gocredits .        # CREDITS の中身を�
   - 呼ぶ行の SHA は `tagpr.yml` と同じにする（`verify-subtree.mjs` がこちらも照合する）
   - 権限は `actions: write` と `pull-requests: write`。何も checkout しない
   - `tagpr.yml` の名前と `workflow_dispatch:` を消さない（これが起動する）
-- `.github/workflows/release.yml`: タグで起動する。書き込み権限を持つジョブではビルドしない。
-  - `check` ジョブ（`contents: read` だけ）: タグが `vX.Y.Z` の形で main の上にあるか
-    （`release-tag.mjs`。プレリリースかもここで決める）、CHANGELOG の節があるか、`CREDITS` が
-    最新かを確かめる。gocredits（依存のコード）は attestation に署名できる `build` ではなくここで走らせる
-  - `build` ジョブ（`contents: read` と attestation の権限）: `goreleaser release --skip=publish` で
-    アーカイブを作り、build provenance の attestation を付ける。GoReleaser に token は渡さない
-  - `publish` ジョブ（`contents: write`）: CHANGELOG の節を本文にして Release を draft で作り、
+- `.github/workflows/release.yml`: タグで起動する。**中身は kan/tagpr-scripts の共通の workflow
+  （`build-go.yml` と `release-go.yml`）を呼ぶジョブだけ**（kan/tagpr-scripts#17）。呼ぶ行の SHA は
+  `tagpr.yml` と同じにする（`verify-subtree.mjs` がこちらも照合する）。動きと再実行の仕方は、
+  tagpr-scripts の README の「The Go release workflows」。書き込み権限を持つジョブではビルドしない。
+  - `build`（`build-go.yml`）: `check` のジョブ（`contents: read` だけ）で、タグが `vX.Y.Z` の形で
+    main の上にあるか（`release-tag.mjs`。プレリリースかもここで決める）、CHANGELOG の節があるか、
+    `CREDITS` が最新かを確かめる。gocredits（依存のコード）は attestation に署名できるジョブではなく
+    ここで走る。続く `build` のジョブで、走っている Go が go.mod の版と同じかを確かめ、
+    `goreleaser release --skip=publish` でアーカイブを作り、build provenance の attestation を付ける。
+    GoReleaser に token は渡さない
+  - `release`（`release-go.yml`、`contents: write`）: CHANGELOG の節を本文にして Release を draft で作り、
     アーカイブを載せてから公開する。前の試行が残した Release を見て、draft なら作り直し、
     公開済みなら何もしない
+  - **attestation の署名元は `kan/tagpr-scripts/.github/workflows/build-go.yml`**。reusable workflow が
+    署名した attestation は、`gh attestation verify` に `--signer-workflow`（か `--signer-repo`）を
+    渡さないと通らない。1.1.6 までは notify-slack の `release.yml` が署名したので、`--repo` だけで確かめる
   - **immutable releases を有効にしてある。** 公開した Release のアセットとタグは変えられない
     （Release の削除はできる）。アセットを載せるのは draft の間だけ
   - **ビルドは再現可能にしてある**（`.goreleaser.yaml` の `-trimpath`、`mod_timestamp`、アーカイブ内の
@@ -176,9 +183,10 @@ go tool -modfile=tools/release/go.mod gocredits .        # CREDITS の中身を�
    - **最新の tagpr の run が success であること。** 失敗した run はリリース PR を
      draft にする（成功した run がどれを ready に戻し、どれを閉じるかは、下の 3 の
      「The tagpr workflow」）。失敗していたら
-     `scripts/release-prepare.sh` の出力を読む
-     - `TAGPR_ARTIFACT_DIR must hold the generated CREDITS file` なら、`credits` のジョブが
-       落ちたか artifact を受け取れていない。`credits` のジョブを直すか、run を再実行する
+     `scripts/tagpr/release-prepare.mjs` の出力を読む
+     - `--credits needs TAGPR_ARTIFACT_DIR to hold the generated CREDITS file` なら、共通の
+       workflow の `Generate CREDITS` のジョブが落ちたか、artifact を受け取れていない。そのジョブの
+       ログを見て直すか、run を再実行する
      - それ以外は `release-prepare.mjs` が CHANGELOG を拒んでいる。CHANGELOG を直す PR を
        main にマージすると作り直される
    - **版（PR のタイトル）が正しいこと。** 既定は patch。前回のリリース以降に
@@ -249,10 +257,11 @@ go tool -modfile=tools/release/go.mod gocredits .        # CREDITS の中身を�
    attestation は次で確かめる。
 
    ```bash
-   gh attestation verify notify-slack_X.Y.Z_linux_amd64.tar.gz --repo kan/notify-slack
+   gh attestation verify notify-slack_X.Y.Z_linux_amd64.tar.gz --repo kan/notify-slack \
+     --signer-workflow kan/tagpr-scripts/.github/workflows/build-go.yml
    ```
 
-   **`release.yml` の `publish` が落ちたら、run を再実行する**（`gh run rerun <run-id> --failed`）。
-   draft が残っていれば作り直し、公開済みなら何もしない。**`build` が渡すアーカイブの artifact は
-   1 日で消える。** 1 日を過ぎたら `--failed` を付けずに run の全体を再実行する。再現可能な
-   ビルドなので、同じアーカイブができる。
+   **`release.yml` の `release` が落ちたら、run を再実行する**（`gh run rerun <run-id> --failed`）。
+   draft が残っていれば作り直し、公開済みなら何もしない。**`build` が渡すアーカイブと本文の
+   artifact は 7 日で消える。** 7 日を過ぎたら `--failed` を付けずに run の全体を再実行する。
+   再現可能なビルドなので、同じアーカイブができる。

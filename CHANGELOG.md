@@ -9,6 +9,7 @@
 ### Infrastructure
 
 - 開発ツール（golangci-lint、govulncheck）をルートの `go.mod` から別 module の `tools/go.mod` へ移した。配布するバイナリの依存の版は変わらない。
+- リリースの workflow を [kan/tagpr-scripts](https://github.com/kan/tagpr-scripts) の共通の workflow に切り替えた。アーカイブの中身は変わらない。attestation の署名元の workflow は `kan/tagpr-scripts/.github/workflows/build-go.yml` になる。`gh attestation verify` には `--signer-workflow kan/tagpr-scripts/.github/workflows/build-go.yml` も渡す（README）。
 
 ## [1.1.6] - 2026-11-17
 

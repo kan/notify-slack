@@ -22,8 +22,12 @@ build provenance の attestation が付いている（1.1.5 より後の版）�
 次で確かめられる。
 
 ```bash
-gh attestation verify notify-slack_<version>_linux_amd64.tar.gz --repo kan/notify-slack
+gh attestation verify notify-slack_<version>_linux_amd64.tar.gz --repo kan/notify-slack \
+  --signer-workflow kan/tagpr-scripts/.github/workflows/build-go.yml
 ```
+
+1.1.6 までは署名元の workflow が違うので、`--signer-workflow` を付けずに
+`--repo kan/notify-slack` だけで確かめる。
 
 ### go install
 
